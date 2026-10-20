@@ -38,13 +38,6 @@
 純靜態網頁（HTML + CSS + JavaScript，無打包工具），部署在 GitHub Pages。
 Gemini 模型會依金鑰即時查詢可用清單（ListModels）自動挑選，模型停用時不用改程式。
 
-## 設計參考
-
-- 翻轉教育〈Gemini 學生輔導紀錄小幫手〉
-- GenieBench〈輔導紀錄撰寫小助理〉：「輔導內容重點」＋「聯繫內容」兩段式、口語轉書面語、強調學生後續行動
-- 教師社群分享的 Gemini Gem 與輔導紀錄提示詞
-- 奕鈞老師〈AI 輔導紀錄快寫工具〉：狀況標籤庫、教師處置標籤、語氣改寫、座號批次處理
-
 ---
 
 Made with ❤️ by [阿凱老師](https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5)
