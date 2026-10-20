@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>輔導紀錄小幫手</title>
+  <meta name="description" content="把老師的口語描述整理成正式輔導紀錄（輔導內容重點＋聯繫內容），學生姓名自動去識別化，資料只存在你的瀏覽器。">
+  <meta name="theme-color" content="#2f6f62">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="輔導紀錄小幫手">
+  <meta property="og:description" content="口語描述 → 正式輔導紀錄，一鍵複製到校務系統。姓名自動換代號，資料只存在你的瀏覽器。">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css?v=1.0.0">
+</head>
+<body>
+  <header class="topbar no-print">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="42" height="42">
+      <div>
+        <h1>輔導紀錄小幫手</h1>
+        <p>口語描述 → 正式輔導紀錄，一鍵複製到校務系統</p>
+      </div>
+    </div>
+    <nav class="top-actions" aria-label="工具列">
+      <button type="button" class="btn ghost" id="btnHistory" title="已儲存的輔導紀錄">📚 <span class="label">紀錄本</span> <span class="badge" id="historyCount">0</span></button>
+      <button type="button" class="btn ghost" id="btnSettings" title="設定 Gemini API 金鑰">⚙️ <span class="label">AI 設定</span> <span class="dot" id="keyDot" aria-hidden="true"></span></button>
+    </nav>
+  </header>
+
+  <main class="layout no-print">
+    <!-- 左：輸入 -->
+    <section class="card" aria-labelledby="inputTitle">
+      <div class="card-head">
+        <h2 id="inputTitle"><span class="step">1</span>填寫輔導情境</h2>
+        <button type="button" class="link-btn" id="btnClear">全部清空</button>
+      </div>
+
+      <p class="privacy-note">🔒 學生姓名只留在你的電腦；送給 AI 前會自動換成「甲生、乙生」代號，電話與身分證字號也會遮蔽。</p>
+
+      <div class="grid-3">
+        <label class="field">
+          <span class="field-label">學生姓名 <small>（不會送出）</small></span>
+          <input id="studentName" placeholder="例：王小明" autocomplete="off">
+        </label>
+        <label class="field">
+          <span class="field-label">年級</span>
+          <select id="grade">
+            <option value="">請選擇</option>
+            <option>一年級</option><option>二年級</option><option>三年級</option>
+            <option>四年級</option><option>五年級</option><option>六年級</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">日期</span>
+          <input type="date" id="date">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">其他相關人物 <small>（同學姓名，用逗號分隔，會換成乙生、丙生…）</small></span>
+        <input id="otherNames" placeholder="例：李大同, 陳美美" autocomplete="off">
+      </label>
+
+      <fieldset class="field">
+        <legend class="field-label">輔導對象</legend>
+        <div class="seg">
+          <label><input type="radio" name="target" value="student" checked><span>只和學生談</span></label>
+          <label><input type="radio" name="target" value="parent"><span>聯繫家長</span></label>
+          <label><input type="radio" name="target" value="both"><span>學生＋家長</span></label>
+          <label><input type="radio" name="target" value="teacher"><span>教師／輔導室</span></label>
+        </div>
+      </fieldset>
+
+      <label class="field">
+        <span class="field-label">輔導方式</span>
+        <select id="method">
+          <option>個別晤談</option><option>團體晤談</option><option>電話聯繫</option>
+          <option>聯絡簿</option><option>家庭訪問</option><option>線上訊息</option><option>其他</option>
+        </select>
+      </label>
+
+      <fieldset class="field">
+        <legend class="field-label">輔導類別 <small>（可複選）</small></legend>
+        <div class="chips" id="categories"></div>
+      </fieldset>
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="event">事件經過 <em class="req">必填</em></label>
+          <button type="button" class="mic" data-target="event">🎤 語音輸入</button>
+        </div>
+        <div class="templates" id="templates"><span>快速範例：</span></div>
+        <textarea id="event" rows="5" placeholder="用口語寫就好，例如：下課時他和同學在走廊搶球，一生氣推了同學一把……"></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="handling">老師的處理與引導 <small>（選填）</small></label>
+          <button type="button" class="mic" data-target="handling">🎤 語音輸入</button>
+        </div>
+        <textarea id="handling" rows="4" placeholder="例：先分別聽兩人說法，引導他說出當下的感受，再一起想下次可以怎麼做。"></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="response">學生的回應與後續 <small>（選填）</small></label>
+          <button type="button" class="mic" data-target="response">🎤 語音輸入</button>
+        </div>
+        <textarea id="response" rows="3" placeholder="例：他承認推人不對，主動向同學道歉，答應下次先用說的。"></textarea>
+      </div>
+
+      <details class="options" open>
+        <summary>輸出設定</summary>
+        <div class="options-body">
+          <div class="opt-row">
+            <span class="opt-name">篇幅</span>
+            <div class="seg small">
+              <label><input type="radio" name="length" value="short"><span>精簡</span></label>
+              <label><input type="radio" name="length" value="normal" checked><span>標準</span></label>
+              <label><input type="radio" name="length" value="long"><span>詳細</span></label>
+            </div>
+          </div>
+          <div class="opt-row">
+            <span class="opt-name">語氣</span>
+            <div class="seg small">
+              <label><input type="radio" name="tone" value="neutral" checked><span>客觀中性</span></label>
+              <label><input type="radio" name="tone" value="warm"><span>溫暖正向</span></label>
+            </div>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="restoreNames">
+            <span>結果中的同學代號（乙生、丙生…）在本機還原成真實姓名</span>
+          </label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="button" class="btn primary big" id="btnGenerate">✨ AI 整理成輔導紀錄</button>
+        <button type="button" class="btn" id="btnCopyPrompt" title="不需要 API 金鑰，貼到 Gemini 網頁版使用">📋 不用金鑰：複製提示詞到 Gemini</button>
+      </div>
+
+      <details class="peek">
+        <summary>👀 查看實際送給 AI 的內容（已去識別化）</summary>
+        <pre id="peek"></pre>
+      </details>
+    </section>
+
+    <!-- 右：結果 -->
+    <section class="card output" id="outputCard" aria-labelledby="outputTitle">
+      <div class="card-head">
+        <h2 id="outputTitle"><span class="step">2</span>輔導紀錄結果</h2>
+        <span class="status" id="status" role="status"></span>
+      </div>
+
+      <div class="result-block">
+        <div class="result-head">
+          <label for="keyPoints">輔導內容重點</label>
+          <span class="count" id="kpCount">0 字</span>
+          <button type="button" class="btn small" data-copy="keyPoints">複製</button>
+        </div>
+        <textarea id="keyPoints" rows="4" placeholder="AI 產生後會出現在這裡，也可以直接修改。"></textarea>
+      </div>
+
+      <div class="result-block">
+        <div class="result-head">
+          <label for="contact">聯繫內容</label>
+          <span class="count" id="ctCount">0 字</span>
+          <button type="button" class="btn small" data-copy="contact">複製</button>
+        </div>
+        <textarea id="contact" rows="11" placeholder="詳細的事件經過、老師如何處理與引導、學生之後可以怎麼做。"></textarea>
+      </div>
+
+      <div class="actions wrap">
+        <button type="button" class="btn primary" id="btnCopyAll">📋 複製全部</button>
+        <button type="button" class="btn" id="btnRegenerate">🔄 重新產生</button>
+        <button type="button" class="btn" id="btnSave">💾 存入紀錄本</button>
+        <button type="button" class="btn" id="btnPrint">🖨️ 列印</button>
+      </div>
+
+      <details class="paste-back" id="pasteBack">
+        <summary>📥 用 Gemini 網頁版產生的？把回覆貼回來自動拆段</summary>
+        <textarea id="pasteText" rows="5" placeholder="把 Gemini 的整段回覆貼在這裡"></textarea>
+        <button type="button" class="btn small" id="btnParse">自動拆成兩段</button>
+      </details>
+
+      <div class="tips">
+        <h3>登錄前檢查一下</h3>
+        <ul>
+          <li>事實正確嗎？AI 只會根據你寫的內容整理，沒寫的細節請自行補上。</li>
+          <li>有沒有標籤化或診斷性字眼？例如「過動」「有問題」，建議改成具體行為描述。</li>
+          <li>有寫到學生接下來可以怎麼做、老師會持續觀察什麼嗎？</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer no-print">
+    <p class="disclaimer">AI 產出內容僅供參考，請老師確認事實正確後再登錄。本工具沒有自己的伺服器，輔導資料只存在你的瀏覽器。</p>
+    <p class="site-credit">
+      Made with <span class="site-credit__heart" aria-label="愛心">❤️</span> by
+      <a href="https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5"
+         target="_blank" rel="noopener noreferrer" class="site-credit__author">阿凱老師</a>
+    </p>
+  </footer>
+
+  <!-- AI 設定 -->
+  <dialog id="settingsDialog" class="modal" aria-labelledby="settingsTitle">
+    <form method="dialog" class="modal-inner" id="settingsForm">
+      <div class="modal-head">
+        <h2 id="settingsTitle">⚙️ AI 設定</h2>
+        <button type="button" class="icon-btn" data-close aria-label="關閉">✕</button>
+      </div>
+      <p class="hint" id="settingsHint" hidden></p>
+      <p>本工具使用 Google Gemini API。金鑰只存在這台電腦的瀏覽器，並且只會直接送到 Google。</p>
+      <label class="field">
+        <span class="field-label">Gemini API 金鑰</span>
+        <div class="input-row">
+          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="貼上你的金鑰">
+          <button type="button" class="btn small" id="btnToggleKey">顯示</button>
+        </div>
+      </label>
+      <p class="small-text">還沒有金鑰？到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> 用學校或個人 Google 帳號免費建立。</p>
+      <label class="check">
+        <input type="checkbox" id="rememberKey">
+        <span>記住金鑰（公用電腦請不要勾選，關閉分頁就會忘記）</span>
+      </label>
+      <label class="field">
+        <span class="field-label">使用的模型</span>
+        <div class="input-row">
+          <select id="modelSelect"><option value="">（儲存金鑰後自動抓取）</option></select>
+          <button type="button" class="btn small" id="btnFetchModels">重新抓取</button>
+        </div>
+      </label>
+      <p class="status-line" id="settingsStatus" role="status"></p>
+      <div class="warn">
+        ⚠️ 免費方案的 Gemini API，輸入內容可能被 Google 用來改善服務。請維持去識別化，不要輸入身分證字號、住址、電話等個資。
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger-ghost" id="btnClearKey">清除金鑰</button>
+        <button type="button" class="btn primary" id="btnSaveKey">測試並儲存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 紀錄本 -->
+  <dialog id="historyDialog" class="modal drawer" aria-labelledby="historyTitle">
+    <div class="modal-inner">
+      <div class="modal-head">
+        <h2 id="historyTitle">📚 紀錄本</h2>
+        <button type="button" class="icon-btn" data-close aria-label="關閉">✕</button>
+      </div>
+      <p class="small-text">紀錄只存在這個瀏覽器。公用電腦用完請匯出後按「全部清除」。</p>
+      <div class="input-row">
+        <input id="historySearch" type="search" placeholder="搜尋姓名、日期、類別或內容">
+      </div>
+      <ul class="history-list" id="historyList"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn danger-ghost" id="btnClearHistory">全部清除</button>
+        <button type="button" class="btn" id="btnExportCsv">⬇️ 匯出 Excel（CSV）</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="printArea" class="print-only"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js?v=1.0.0"></script>
+</body>
+</html>
