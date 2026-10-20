@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.20-1';
+  var APP_VERSION = '2026.10.20-2';
   var BAR_ID = 'sw-update-bar';
   var params = new URLSearchParams(location.search);
 
@@ -24,15 +24,15 @@
       '#' + BAR_ID + '{position:fixed;z-index:9999;left:50%;top:max(14px,env(safe-area-inset-top));transform:translateX(-50%);',
       'width:max-content;max-width:calc(100vw - 24px);display:flex;align-items:center;gap:12px;',
       'background:#1f4d44;color:#fff;padding:10px 12px 10px 18px;border-radius:999px;',
-      'box-shadow:0 14px 34px -10px rgba(0,0,0,.45);font:15px/1.5 "PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;',
+      'box-shadow:0 14px 34px -10px rgba(0,0,0,.45);font:16px/1.5 "PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;',
       'animation:swBarIn .35s ease-out}',
       '#' + BAR_ID + ' .sw-msg{display:flex;flex-direction:column}',
       '#' + BAR_ID + ' .sw-title{font-weight:700}',
-      '#' + BAR_ID + ' .sw-sub{display:none;font-size:13px;opacity:.85}',
+      '#' + BAR_ID + ' .sw-sub{display:none;font-size:14px;opacity:.85}',
       '#' + BAR_ID + ' button{cursor:pointer;border:0;font:inherit}',
       '#' + BAR_ID + ' #sw-go{background:#f3b46b;color:#3b2406;font-weight:700;padding:8px 16px;border-radius:999px}',
       '#' + BAR_ID + ' #sw-go:hover{background:#f7c78c}',
-      '#' + BAR_ID + ' #sw-x{background:transparent;color:#cfe3dc;width:36px;height:36px;border-radius:50%;font-size:16px}',
+      '#' + BAR_ID + ' #sw-x{background:transparent;color:#cfe3dc;width:36px;height:36px;border-radius:50%;font-size:17px}',
       '#' + BAR_ID + ' #sw-x:hover{background:rgba(255,255,255,.12)}',
       '#' + BAR_ID + ' button:focus-visible{outline:3px solid #f3b46b;outline-offset:2px}',
       '@keyframes swBarIn{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translate(-50%,0)}}',
@@ -41,7 +41,7 @@
       'gap:10px;border-radius:18px;padding:14px 12px 12px 16px;animation-name:swBarUp}',
       '#' + BAR_ID + ' .sw-msg{grid-area:msg}#' + BAR_ID + ' .sw-sub{display:block}',
       '#' + BAR_ID + ' #sw-x{grid-area:x;width:44px;height:44px}',
-      '#' + BAR_ID + ' #sw-go{grid-area:go;width:100%;min-height:48px;border-radius:14px;font-size:16px}',
+      '#' + BAR_ID + ' #sw-go{grid-area:go;width:100%;min-height:48px;border-radius:14px;font-size:17px}',
       '@keyframes swBarUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}}',
       '@media (prefers-reduced-motion:reduce){#' + BAR_ID + '{animation:none}}',
       '@media print{#' + BAR_ID + '{display:none!important}}',
