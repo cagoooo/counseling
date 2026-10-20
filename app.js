@@ -11,6 +11,9 @@
     view: 'crh.view',
     roster: 'crh.roster',
     lastBackup: 'crh.lastBackup',
+    publicMode: 'crh.publicMode',
+    format: 'crh.format',
+    onboarded: 'crh.onboarded',
   };
 
   const CATEGORIES = ['人際關係', '情緒困擾', '學習適應', '生活常規', '行為偏差', '家庭關係', '身心健康', '校園安全', '生涯興趣', '其他'];
@@ -120,11 +123,25 @@
   const getModel = () => store.get('localStorage', KEYS.model) || '';
   const setModel = (m) => (m ? store.set('localStorage', KEYS.model, m) : store.del('localStorage', KEYS.model));
 
+  // 公用電腦模式：草稿、批次、紀錄本、名冊改存在「這個分頁」（sessionStorage），關閉分頁就清除
+  const DATA_KEYS = ['draft', 'batch', 'history', 'roster', 'lastBackup'];
+  const isPublicMode = () => store.get('localStorage', KEYS.publicMode) === '1';
+  const dataArea = () => (isPublicMode() ? 'sessionStorage' : 'localStorage');
+
+  // 學校紀錄格式：兩個欄位的名稱與字數上限（0＝不限）
+  const DEFAULT_FORMAT = { kpLabel: '輔導內容重點', kpMax: 0, ctLabel: '聯繫內容', ctMax: 0 };
+  function loadFormat() {
+    try {
+      return { ...DEFAULT_FORMAT, ...JSON.parse(store.get('localStorage', KEYS.format) || '{}') };
+    } catch { return { ...DEFAULT_FORMAT }; }
+  }
+  let fmt = loadFormat();
+
   function loadHistory() {
-    try { return JSON.parse(store.get('localStorage', KEYS.history) || '[]'); } catch { return []; }
+    try { return JSON.parse(store.get(dataArea(), KEYS.history) || '[]'); } catch { return []; }
   }
   function saveHistory(list) {
-    if (!store.set('localStorage', KEYS.history, JSON.stringify(list))) toast('瀏覽器無法儲存（可能是私密視窗）', 'error');
+    if (!store.set(dataArea(), KEYS.history, JSON.stringify(list))) toast('瀏覽器無法儲存（可能是私密視窗）', 'error');
   }
 
   // ---------- 小工具 ----------
@@ -245,6 +262,7 @@
       length: ($('input[name=length]:checked') || {}).value || 'normal',
       tone: ($('input[name=tone]:checked') || {}).value || 'neutral',
       restoreNames: $('#restoreNames').checked,
+      followupId: $('#followupOn').checked ? $('#followupSelect').value : '',
     };
   }
 
@@ -274,7 +292,37 @@
     $$('input[name=length]').forEach((r) => { r.checked = r.value === (f.length || 'normal'); });
     $$('input[name=tone]').forEach((r) => { r.checked = r.value === (f.tone || 'neutral'); });
     $('#restoreNames').checked = !!f.restoreNames;
+    refreshFollowup(f.followupId || '');
+    $('#followupOn').checked = !!f.followupId && $('#followupSelect').value === f.followupId;
+    $('#followupSelect').disabled = !$('#followupOn').checked;
     refreshSingleTagState();
+  }
+
+  // 同一位學生在紀錄本有過去紀錄時，提供「追蹤輔導」選項
+  const recDate = (r) => (r.form && r.form.date) || String(r.savedAt || '').slice(0, 10);
+  function historyFor(name) {
+    if (!name) return [];
+    return loadHistory()
+      .filter((r) => {
+        const n = (r.form && r.form.studentName) || '';
+        return n === name || n.endsWith(` ${name}`);
+      })
+      .sort((a, b) => recDate(b).localeCompare(recDate(a)));
+  }
+  function refreshFollowup(keepId) {
+    const name = $('#studentName').value.trim();
+    const list = historyFor(name);
+    $('#followupBox').hidden = !list.length;
+    if (!list.length) {
+      $('#followupOn').checked = false;
+      $('#followupSelect').innerHTML = '';
+      return;
+    }
+    $('#followupTitle').textContent = `🔁 ${name} 在紀錄本有 ${list.length} 筆過去紀錄`;
+    const cur = keepId || $('#followupSelect').value;
+    $('#followupSelect').innerHTML = list.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(recDate(r))}｜${escapeHtml((r.keyPoints || '').slice(0, 26))}…</option>`).join('');
+    if (list.some((r) => r.id === cur)) $('#followupSelect').value = cur;
+    $('#followupSelect').disabled = !$('#followupOn').checked;
   }
 
   function refreshSingleTagState() {
@@ -291,11 +339,11 @@
   }
   function saveDraft() {
     const data = { form: readForm(), keyPoints: $('#keyPoints').value, contact: $('#contact').value };
-    store.set('localStorage', KEYS.draft, JSON.stringify(data));
+    store.set(dataArea(), KEYS.draft, JSON.stringify(data));
   }
   function loadDraft() {
     try {
-      const d = JSON.parse(store.get('localStorage', KEYS.draft) || 'null');
+      const d = JSON.parse(store.get(dataArea(), KEYS.draft) || 'null');
       if (!d) return false;
       fillForm(d.form);
       $('#keyPoints').value = d.keyPoints || '';
@@ -304,19 +352,30 @@
     } catch { return false; }
   }
 
+  const fieldMax = (field) => Number(field === 'keyPoints' ? fmt.kpMax : fmt.ctMax) || 0;
+  function countText(text, field) {
+    const n = countChars(text || '');
+    const max = fieldMax(field);
+    return { label: max ? `${n} / ${max} 字` : `${n} 字`, over: !!max && n > max };
+  }
+  function setCount(el, text, field) {
+    const c = countText(text, field);
+    el.textContent = c.over ? `${c.label}（超過上限）` : c.label;
+    el.classList.toggle('over', c.over);
+  }
   function updateCounts() {
-    $('#kpCount').textContent = `${countChars($('#keyPoints').value)} 字`;
-    $('#ctCount').textContent = `${countChars($('#contact').value)} 字`;
+    setCount($('#kpCount'), $('#keyPoints').value, 'keyPoints');
+    setCount($('#ctCount'), $('#contact').value, 'contact');
   }
 
   // ---------- 班級名冊（只存在本機，不會送給 AI） ----------
   function loadRoster() {
-    try { return JSON.parse(store.get('localStorage', KEYS.roster) || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(store.get(dataArea(), KEYS.roster) || '{}') || {}; } catch { return {}; }
   }
   let roster = loadRoster();
   function saveRoster(map) {
     roster = map;
-    store.set('localStorage', KEYS.roster, JSON.stringify(map));
+    store.set(dataArea(), KEYS.roster, JSON.stringify(map));
   }
   const rosterName = (k) => roster[String(k)] || '';
   const seatLabel = (k) => (rosterName(k) ? `${k} 號 ${rosterName(k)}` : `${k} 號`);
@@ -355,7 +414,7 @@
     mains.forEach((n) => list.push({ real: n, code: '甲生' }));
     const others = splitNames(form.otherNames).filter((n) => !mains.includes(n));
     // 名冊上的同學若出現在敘述裡，也自動換代號（老師忘了填「其他相關人物」也不會外洩）
-    const text = [form.event, form.handling, form.response].join('\n');
+    const text = [form.event, form.handling, form.response, form.extraText].join('\n');
     Object.values(roster).forEach((n) => {
       if (mains.includes(n) || others.includes(n)) return;
       const given = /^[一-鿿]{3}$/.test(n) ? n.slice(1) : '';
@@ -395,13 +454,14 @@
     const tone = c.tone === 'warm'
       ? '語氣溫暖、正向、具同理心，肯定學生的努力，但仍維持專業書面用語。'
       : '語氣客觀、中性、專業，避免情緒性字眼。';
-    return [
+    const lenText = (max, d) => (max ? `不超過 ${max} 字（含標點），這是校務系統的欄位上限，務必遵守` : `約 ${d}`);
+    const rules = [
       '### 角色',
       '你是一位經驗豐富的臺灣國小導師，熟悉學校「學生輔導資料紀錄表」的撰寫方式。你的任務是把老師口語、零散的描述或點選的標籤，整理成可以直接登錄到校務系統的正式輔導紀錄。',
       '',
       '### 輸出內容',
-      `1.「輔導內容重點」：用一段話簡要說明發生了什麼事（約 ${len.kp}）。`,
-      `2.「聯繫內容」：用一段話詳細描述事件經過、教師如何處理與引導學生，以及學生未來可以怎麼做（約 ${len.ct}）。`,
+      `1.「${fmt.kpLabel}」：用一段話簡要說明發生了什麼事（${lenText(Number(fmt.kpMax) || 0, len.kp)}）。`,
+      `2.「${fmt.ctLabel}」：用一段話詳細描述事件經過、教師如何處理與引導學生，以及學生未來可以怎麼做（${lenText(Number(fmt.ctMax) || 0, len.ct)}）。`,
       '',
       '### 撰寫規則',
       '- 一律使用繁體中文與臺灣慣用語，採書面語、第三人稱的教師紀錄視角。',
@@ -413,9 +473,19 @@
       '- 資料沒有提供的項目（例如事件經過、教師的具體做法、學生的回應）就依狀況細節與教師處置概括帶過；內文絕對不要出現「未說明」「未填寫」「資料未提供」這類字眼，學生沒有表態時就改寫教師後續將持續觀察的重點。',
       '- 把口語轉為專業描述（例如「他說好」→「該生表示願意嘗試」、「很兇」→「情緒較為激動」），避免標籤化或貶抑字眼，不做醫療或心理診斷。',
       '- 這是事件紀錄，不是期末評語：不要寫「期許你…」「是個乖巧的孩子」這類對話句或評價句。',
-      '- 「聯繫內容」依序包含：事件經過 → 教師的處理與引導 → 學生的反應或承諾（只有資料中有寫才寫，沒寫就略過，不要自行寫「表示理解」「願意配合」）→ 後續可行的做法或教師將持續觀察的重點。',
+      `- 「${fmt.ctLabel}」依序包含：事件經過 → 教師的處理與引導 → 學生的反應或承諾（只有資料中有寫才寫，沒寫就略過，不要自行寫「表示理解」「願意配合」）→ 後續可行的做法或教師將持續觀察的重點。`,
       `- ${tone}`,
     ];
+    if (c.prior) {
+      rules.push('- 本次為追蹤輔導：可用一句話銜接前次的狀況或約定（例如「延續前次晤談的約定…」），重點描述本次的觀察與處理；不得把前次紀錄的內容寫成本次發生的事，也不要推測前次之後發生了什麼。');
+    }
+    return rules;
+  }
+
+  function outputFormatLines(mode) {
+    return mode === 'json'
+      ? [`以 JSON 輸出，欄位 key_points 為「${fmt.kpLabel}」，contact 為「${fmt.ctLabel}」。`]
+      : ['只輸出以下兩段，不要有其他說明：', `${fmt.kpLabel}：（一段文字）`, '', `${fmt.ctLabel}：（一段文字）`];
   }
 
   // 把一位學生的資料轉成「輔導資料」區塊（文字已去識別化）
@@ -437,16 +507,22 @@
   }
 
   function buildMessages(form, mode) {
-    const aliases = buildAliases(form);
-    const c = { ...form, target: effectiveTarget(form.target, form.actions) };
+    const prior = form.followupId ? loadHistory().find((r) => r.id === form.followupId) : null;
+    // 前次紀錄可能含已還原的同學姓名，一起納入代號表
+    const aliases = buildAliases({
+      ...form,
+      otherNames: [form.otherNames, prior && prior.form ? prior.form.otherNames : ''].filter(Boolean).join(','),
+      extraText: prior ? `${prior.keyPoints}\n${prior.contact}` : '',
+    });
+    const c = { ...form, target: effectiveTarget(form.target, form.actions), prior };
     const system = systemRules(c);
-    if (mode === 'json') {
-      system.push('', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。');
-    } else {
-      system.push('', '### 輸出格式', '只輸出以下兩段，不要有其他說明：', '輔導內容重點：（一段文字）', '', '聯繫內容：（一段文字）');
-    }
+    system.push('', '### 輸出格式', ...outputFormatLines(mode));
     const di = (s) => deidentify(s, aliases);
     const user = ['### 輔導資料', ...caseLines(c, di)];
+    if (prior) {
+      const d = prior.form && prior.form.date ? rocDate(prior.form.date) : '日期不詳';
+      user.push('', `### 前次輔導紀錄（${d}，僅供銜接參考，不是本次發生的事）`, `${fmt.kpLabel}：${di(prior.keyPoints)}`, `${fmt.ctLabel}：${di(prior.contact)}`);
+    }
     return { system: system.join('\n'), user: user.join('\n'), aliases };
   }
 
@@ -468,8 +544,11 @@
   // ---------- 解析 AI 回覆 ----------
   function parsePlain(text) {
     const t = String(text || '').replace(/\*\*/g, '').replace(/^#+\s*/gm, '');
-    const kp = t.match(/輔導內容(?:重點|要點)\s*[：:]?\s*([\s\S]*?)(?=聯[繫絡](?:內容|事項)\s*[：:]|$)/);
-    const ct = t.match(/聯[繫絡](?:內容|事項)\s*[：:]?\s*([\s\S]*)$/);
+    const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const kpPat = `(?:${esc(fmt.kpLabel)}|輔導內容(?:重點|要點))`;
+    const ctPat = `(?:${esc(fmt.ctLabel)}|聯[繫絡](?:內容|事項))`;
+    const kp = t.match(new RegExp(`${kpPat}\\s*[：:]?\\s*([\\s\\S]*?)(?=${ctPat}\\s*[：:]|$)`));
+    const ct = t.match(new RegExp(`${ctPat}\\s*[：:]?\\s*([\\s\\S]*)$`));
     return { key_points: kp ? kp[1] : '', contact: ct ? ct[1] : '' };
   }
   function parseResult(text) {
@@ -496,7 +575,7 @@
       if (/API key not valid|API_KEY_INVALID/i.test(m)) return '金鑰無效，請確認有沒有貼完整。';
       if (e.status === 400) return `請求格式有誤：${m.slice(0, 120)}`;
       if (e.status === 401 || e.status === 403) return '金鑰沒有權限或已被停用，請到 Google AI Studio 確認。';
-      if (e.status === 404) return '這個模型已停用或不存在，請到「AI 設定」按「重新抓取」換一個模型。';
+      if (e.status === 404) return '這個模型已停用或不存在，請到「⚙️ 設定」按「重新抓取」換一個模型。';
       if (e.status === 429) return '使用量超過額度（免費方案每分鐘、每天有上限），請稍等一下再試。';
       if (e.status >= 500) return 'Google 伺服器暫時忙碌，請稍後再試。';
       return `發生錯誤（${e.status}）：${m.slice(0, 120)}`;
@@ -648,11 +727,11 @@
     const form = readForm();
     const aliases = buildAliases(form);
     const c = { ...form, target: effectiveTarget(form.target, form.actions) };
-    const system = [...systemRules(c), '', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。'].join('\n');
+    const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
     const user = [
       '### 目前的輔導紀錄',
-      `輔導內容重點：${deidentify(kp0, aliases)}`,
-      `聯繫內容：${deidentify(ct0, aliases)}`,
+      `${fmt.kpLabel}：${deidentify(kp0, aliases)}`,
+      `${fmt.ctLabel}：${deidentify(ct0, aliases)}`,
       '',
       '### 改寫指示',
       REWRITE_RULE[kind],
@@ -714,7 +793,7 @@
     if (!text) { toast('請先貼上 Gemini 的回覆', 'error'); return; }
     const r = parsePlain(text);
     if (!r.key_points && !r.contact) {
-      toast('找不到「輔導內容重點」或「聯繫內容」標題，請確認貼上的內容。', 'error', 5000);
+      toast(`找不到「${fmt.kpLabel}」或「${fmt.ctLabel}」標題，請確認貼上的內容。`, 'error', 5000);
       return;
     }
     const aliases = lastChatAliases.length ? lastChatAliases : buildAliases(readForm());
@@ -742,7 +821,7 @@
   }
   function loadBatch() {
     try {
-      const b = JSON.parse(store.get('localStorage', KEYS.batch) || 'null');
+      const b = JSON.parse(store.get(dataArea(), KEYS.batch) || 'null');
       if (b && b.seats && b.results && b.common) return b;
     } catch { /* 忽略 */ }
     return newBatch();
@@ -750,7 +829,7 @@
   let batchTimer;
   function saveBatchSoon() {
     clearTimeout(batchTimer);
-    batchTimer = setTimeout(() => store.set('localStorage', KEYS.batch, JSON.stringify(batch)), 300);
+    batchTimer = setTimeout(() => store.set(dataArea(), KEYS.batch, JSON.stringify(batch)), 300);
   }
   const seatKeys = (obj) => Object.keys(obj).map(Number).sort((a, b) => a - b).map(String);
 
@@ -886,7 +965,7 @@
       for (const k of todo) {
         setBatchProgress(done, todo.length, `正在產生 ${k} 號（${done + 1} / ${todo.length}）…`);
         const c = seatCase(k);
-        const system = [...systemRules(c), '', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。'].join('\n');
+        const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
         const aliases = seatAliases(k);
         const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, aliases))].join('\n');
         try {
@@ -941,12 +1020,14 @@
           ${r.error ? `<span class="err-text">⚠️ ${escapeHtml(r.error)}</span>` : ''}
         </div>
         <div class="field-copy">
-          <label class="mini-label">輔導內容重點</label>
+          <label class="mini-label">${escapeHtml(fmt.kpLabel)}</label>
+          ${countSpan(r.keyPoints, 'keyPoints')}
           ${ok ? '<button type="button" class="btn small" data-bact="copyKp">複製</button>' : ''}
         </div>
         <textarea rows="2" data-field="keyPoints">${escapeHtml(r.keyPoints)}</textarea>
         <div class="field-copy">
-          <label class="mini-label">聯繫內容</label>
+          <label class="mini-label">${escapeHtml(fmt.ctLabel)}</label>
+          ${countSpan(r.contact, 'contact')}
           ${ok ? '<button type="button" class="btn small" data-bact="copyCt">複製</button>' : ''}
         </div>
         <textarea rows="5" data-field="contact">${escapeHtml(r.contact)}</textarea>
@@ -960,6 +1041,11 @@
     renderEnteredCount();
   }
 
+  function countSpan(text, field) {
+    const c = countText(text, field);
+    return `<span class="count${c.over ? ' over' : ''}" data-count="${field}">${c.label}</span>`;
+  }
+
   function renderEnteredCount() {
     const keys = seatKeys(batch.results).filter((k) => batch.results[k].keyPoints || batch.results[k].contact);
     const n = keys.filter((k) => batch.results[k].entered).length;
@@ -968,7 +1054,7 @@
     $('#btnNextEntry').hidden = !keys.length || n === keys.length;
   }
 
-  // 跳到下一位還沒登錄的學生，並先複製好「輔導內容重點」
+  // 跳到下一位還沒登錄的學生，並先複製好第一欄
   function gotoNextEntry() {
     const k = seatKeys(batch.results).find((x) => (batch.results[x].keyPoints || batch.results[x].contact) && !batch.results[x].entered);
     if (!k) { toast('這批都登錄完了 🎉'); return; }
@@ -977,7 +1063,7 @@
     card.classList.remove('flash');
     void card.offsetWidth;
     card.classList.add('flash');
-    copyText(batch.results[k].keyPoints).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的「輔導內容重點」，貼上後再按「聯繫內容」旁的複製` : '複製失敗', ok ? '' : 'error', 4000));
+    copyText(batch.results[k].keyPoints).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的「${fmt.kpLabel}」，貼上後再按「${fmt.ctLabel}」旁的複製` : '複製失敗', ok ? '' : 'error', 4000));
   }
 
   function seatRecord(k) {
@@ -1003,7 +1089,7 @@
     const r = batch.results[k];
     if (btn.dataset.bact === 'copyKp' || btn.dataset.bact === 'copyCt') {
       const isKp = btn.dataset.bact === 'copyKp';
-      copyText(isKp ? r.keyPoints : r.contact).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的${isKp ? '輔導內容重點' : '聯繫內容'} ✓` : '複製失敗', ok ? '' : 'error'));
+      copyText(isKp ? r.keyPoints : r.contact).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的${isKp ? fmt.kpLabel : fmt.ctLabel} ✓` : '複製失敗', ok ? '' : 'error'));
     } else if (btn.dataset.bact === 'entered') {
       r.entered = !r.entered;
       saveBatchSoon();
@@ -1049,7 +1135,7 @@
     const { common } = batch;
     batch = newBatch();
     batch.common = common;
-    store.set('localStorage', KEYS.batch, JSON.stringify(batch));
+    store.set(dataArea(), KEYS.batch, JSON.stringify(batch));
     renderSeatGrid();
     renderSeatEditor();
     renderBatchResults();
@@ -1068,8 +1154,8 @@
       '### 輸出格式',
       `本次共有 ${selected.length} 位學生，請依座號分別輸出，每位格式如下，不要有其他說明：`,
       '【3號】',
-      '輔導內容重點：（一段文字）',
-      '聯繫內容：（一段文字）',
+      `${fmt.kpLabel}：（一段文字）`,
+      `${fmt.ctLabel}：（一段文字）`,
     );
     const blocks = selected.map((k) => {
       const aliases = seatAliases(k);
@@ -1112,6 +1198,7 @@
     list.unshift({ id: uid(), savedAt: new Date().toISOString(), form: readForm(), keyPoints, contact });
     saveHistory(list);
     renderHistoryCount();
+    refreshFollowup();
     toast(`已存入紀錄本 💾${backupNudge()}`, '', backupNeeded() ? 4500 : 2600);
   }
 
@@ -1123,26 +1210,66 @@
   }
   const backupNudge = () => (backupNeeded() ? '（有 ' + unbackedCount() + ' 筆還沒備份，記得到紀錄本備份）' : '');
 
-  function renderHistory() {
+  // 「3 號 陳美美」與「陳美美」視為同一位學生；只有座號（如「3 號」）時保留座號
+  const studentOf = (r) => ((r.form && r.form.studentName) || '（未填姓名）').replace(/^\d{1,2}\s*號\s+(?=\S)/, '');
+  function filteredHistory() {
     const q = $('#historySearch').value.trim();
+    const stu = $('#historyStudent').value;
+    const from = $('#historyFrom').value;
+    const to = $('#historyTo').value;
     const list = loadHistory().filter((r) => {
-      if (!q) return true;
       const f = r.form || {};
+      const d = recDate(r);
+      if (stu && studentOf(r) !== stu) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      if (!q) return true;
       return [f.studentName, f.date, f.grade, (f.categories || []).join(' '), (f.details || []).join(' '), r.keyPoints, r.contact].join(' ').includes(q);
     });
+    // 選了某位學生 → 依時間由舊到新排成時間軸；否則最新的在上面
+    return list.sort((a, b) => (stu ? recDate(a).localeCompare(recDate(b)) : recDate(b).localeCompare(recDate(a))));
+  }
+
+  function renderStudentOptions() {
+    const sel = $('#historyStudent');
+    const cur = sel.value;
+    const counts = {};
+    loadHistory().forEach((r) => { counts[studentOf(r)] = (counts[studentOf(r)] || 0) + 1; });
+    const names = Object.keys(counts).sort((a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true }));
+    sel.innerHTML = `<option value="">全部學生（${names.length} 位）</option>${names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}（${counts[n]} 筆）</option>`).join('')}`;
+    sel.value = names.includes(cur) ? cur : '';
+  }
+
+  function renderHistory() {
+    renderStudentOptions();
+    const stu = $('#historyStudent').value;
+    const list = filteredHistory();
+    const filtered = !!(stu || $('#historySearch').value.trim() || $('#historyFrom').value || $('#historyTo').value);
     const ul = $('#historyList');
+    ul.classList.toggle('timeline', !!stu);
+    const sum = $('#historySummary');
+    if (stu && list.length) {
+      const cats = {};
+      list.forEach((r) => ((r.form && r.form.categories) || []).forEach((c) => { cats[c] = (cats[c] || 0) + 1; }));
+      const catText = Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${c}×${n}`).join('、');
+      sum.textContent = `📈 ${stu}：共 ${list.length} 筆，${recDate(list[0])} ～ ${recDate(list[list.length - 1])}${catText ? `｜${catText}` : ''}`;
+    } else {
+      sum.textContent = filtered ? `符合條件：${list.length} 筆` : `共 ${list.length} 筆紀錄`;
+    }
+    $('#btnClearFilter').hidden = !filtered;
     if (!list.length) {
-      ul.innerHTML = `<li class="empty-text">${q ? '找不到符合的紀錄' : '還沒有儲存的紀錄'}</li>`;
+      ul.innerHTML = `<li class="empty-text">${filtered ? '找不到符合的紀錄' : '還沒有儲存的紀錄'}</li>`;
       return;
     }
-    ul.innerHTML = list.map((r) => {
+    ul.innerHTML = list.map((r, i) => {
       const f = r.form || {};
       const tags = (f.categories || []).map((c) => `<span class="history-tag">${escapeHtml(c)}</span>`).join('');
       return `<li class="history-item" data-id="${escapeHtml(r.id)}">
         <div class="history-meta">
-          <strong>${escapeHtml(f.studentName || '（未填姓名）')}</strong>
+          ${stu ? `<span class="tl-no">第 ${i + 1} 次</span>` : ''}
+          <button type="button" class="history-student" data-act="student" title="只看這位學生的紀錄">${escapeHtml(studentOf(r))}</button>
           <span>${escapeHtml(f.grade || '')}</span>
-          <span>${escapeHtml(f.date || '')}</span>
+          <span>${escapeHtml(recDate(r))}</span>
           <span>${escapeHtml(f.method || '')}</span>
           ${tags}
         </div>
@@ -1156,6 +1283,24 @@
     }).join('');
   }
 
+  function printHistory() {
+    const list = filteredHistory();
+    if (!list.length) { toast('沒有可以列印的紀錄', 'error'); return; }
+    const stu = $('#historyStudent').value;
+    $('#printArea').innerHTML = `
+      <h1>學生輔導紀錄${stu ? `｜${escapeHtml(stu)}` : ''}</h1>
+      <p class="print-sub">共 ${list.length} 筆（${escapeHtml(rocDate(recDate(list[stu ? 0 : list.length - 1])))} ～ ${escapeHtml(rocDate(recDate(list[stu ? list.length - 1 : 0])))}）</p>
+      ${list.map((r) => {
+        const f = r.form || {};
+        return `<section>
+          <h2>${escapeHtml(rocDate(recDate(r)))}｜${escapeHtml(studentOf(r))}｜${escapeHtml(f.method || '')}${(f.categories || []).length ? `｜${escapeHtml(f.categories.join('、'))}` : ''}</h2>
+          <p><strong>${escapeHtml(fmt.kpLabel)}：</strong>${escapeHtml(r.keyPoints)}</p>
+          <p><strong>${escapeHtml(fmt.ctLabel)}：</strong>${escapeHtml(r.contact)}</p>
+        </section>`;
+      }).join('')}`;
+    window.print();
+  }
+
   function onHistoryClick(e) {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -1163,6 +1308,11 @@
     const list = loadHistory();
     const rec = list.find((r) => r.id === id);
     if (!rec) return;
+    if (btn.dataset.act === 'student') {
+      $('#historyStudent').value = studentOf(rec);
+      renderHistory();
+      return;
+    }
     if (btn.dataset.act === 'load') {
       switchView('single');
       fillForm(rec.form);
@@ -1173,7 +1323,7 @@
       $('#historyDialog').close();
       setStatus('已載入紀錄', 'ok');
     } else if (btn.dataset.act === 'copy') {
-      copyText(`輔導內容重點：${rec.keyPoints}\n\n聯繫內容：${rec.contact}`).then((ok) => toast(ok ? '已複製' : '複製失敗', ok ? '' : 'error'));
+      copyText(`${fmt.kpLabel}：${rec.keyPoints}\n\n${fmt.ctLabel}：${rec.contact}`).then((ok) => toast(ok ? '已複製' : '複製失敗', ok ? '' : 'error'));
     } else if (btn.dataset.act === 'delete') {
       if (!confirm('確定刪除這筆紀錄？')) return;
       saveHistory(list.filter((r) => r.id !== id));
@@ -1183,28 +1333,22 @@
   }
 
   function exportCsv() {
-    const list = loadHistory();
-    if (!list.length) { toast('紀錄本是空的', 'error'); return; }
+    const list = filteredHistory();
+    if (!list.length) { toast('沒有可以匯出的紀錄', 'error'); return; }
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [['日期', '年級', '學生', '輔導對象', '輔導方式', '晤談地點', '輔導類別', '狀況細節', '輔導內容重點', '聯繫內容']];
+    const rows = [['日期', '年級', '學生', '輔導對象', '輔導方式', '晤談地點', '輔導類別', '狀況細節', fmt.kpLabel, fmt.ctLabel]];
     list.forEach((r) => {
       const f = r.form || {};
-      rows.push([f.date, f.grade, f.studentName, TARGET_LABEL[f.target] || '', f.method, f.location || '', (f.categories || []).join('、'), (f.details || []).join('、'), r.keyPoints, r.contact]);
+      rows.push([recDate(r), f.grade, f.studentName, TARGET_LABEL[f.target] || '', f.method, f.location || '', (f.categories || []).join('、'), (f.details || []).join('、'), r.keyPoints, r.contact]);
     });
-    const csv = `﻿${rows.map((row) => row.map(cell).join(',')).join('\r\n')}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `輔導紀錄_${todayStr()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const stu = $('#historyStudent').value;
+    downloadFile(`輔導紀錄${stu ? `_${stu}` : ''}_${todayStr()}.csv`, `\uFEFF${rows.map((row) => row.map(cell).join(',')).join('\r\n')}`, 'text/csv;charset=utf-8');
+    toast(`已匯出 ${list.length} 筆`);
   }
 
   // ---------- 備份與還原 ----------
   const BACKUP_TYPE = 'counseling-record-helper-backup';
-  const getLastBackup = () => store.get('localStorage', KEYS.lastBackup) || '';
+  const getLastBackup = () => store.get(dataArea(), KEYS.lastBackup) || '';
   const unbackedCount = () => {
     const last = getLastBackup();
     return loadHistory().filter((r) => !last || (r.savedAt || '') > last).length;
@@ -1248,7 +1392,7 @@
     if (!records.length && !Object.keys(roster).length) { toast('紀錄本和名冊都是空的，不需要備份', 'error'); return; }
     const data = { type: BACKUP_TYPE, version: 1, exportedAt: new Date().toISOString(), records, roster };
     downloadFile(`輔導紀錄備份_${todayStr()}.json`, JSON.stringify(data, null, 2), 'application/json');
-    store.set('localStorage', KEYS.lastBackup, new Date().toISOString());
+    store.set(dataArea(), KEYS.lastBackup, new Date().toISOString());
     renderBackupHint();
     renderHistoryCount();
     toast(`已備份 ${records.length} 筆紀錄${Object.keys(roster).length ? '與班級名冊' : ''}。檔案含學生姓名，請妥善保存 🔒`, '', 4500);
@@ -1329,8 +1473,8 @@
         <tr><th>日期</th><td>${escapeHtml(rocDate(f.date))}</td><th>輔導方式</th><td>${escapeHtml(f.method)}${f.location ? `（${escapeHtml(f.location)}）` : ''}</td></tr>
         <tr><th>輔導對象</th><td>${escapeHtml(TARGET_LABEL[effectiveTarget(f.target, f.actions)])}</td><th>輔導類別</th><td>${escapeHtml(f.categories.join('、'))}</td></tr>
       </table>
-      <section><h2>輔導內容重點</h2><p>${escapeHtml(keyPoints)}</p></section>
-      <section><h2>聯繫內容</h2><p>${escapeHtml(contact)}</p></section>`;
+      <section><h2>${escapeHtml(fmt.kpLabel)}</h2><p>${escapeHtml(keyPoints)}</p></section>
+      <section><h2>${escapeHtml(fmt.ctLabel)}</h2><p>${escapeHtml(contact)}</p></section>`;
     window.print();
   }
 
@@ -1370,8 +1514,68 @@
     }
     if (cur) $('#modelSelect').value = cur;
     setSettingsStatus(getApiKey() ? `目前已設定金鑰${cur ? `，模型：${cur}` : ''}` : '');
+    fillFormatInputs();
+    $('#publicMode').checked = isPublicMode();
+    $('#rememberKey').disabled = isPublicMode();
     $('#settingsDialog').showModal();
     if (!getApiKey()) $('#apiKey').focus();
+  }
+
+  function fillFormatInputs() {
+    $('#fmtKpLabel').value = fmt.kpLabel;
+    $('#fmtCtLabel').value = fmt.ctLabel;
+    $('#fmtKpMax').value = fmt.kpMax || '';
+    $('#fmtCtMax').value = fmt.ctMax || '';
+  }
+  function saveFormatFromInputs() {
+    const clean = (v, d) => (String(v || '').trim().slice(0, 12) || d);
+    const num = (v) => Math.max(0, Math.min(2000, parseInt(v, 10) || 0));
+    fmt = {
+      kpLabel: clean($('#fmtKpLabel').value, DEFAULT_FORMAT.kpLabel),
+      kpMax: num($('#fmtKpMax').value),
+      ctLabel: clean($('#fmtCtLabel').value, DEFAULT_FORMAT.ctLabel),
+      ctMax: num($('#fmtCtMax').value),
+    };
+    if (fmt.kpLabel === fmt.ctLabel) fmt.ctLabel = `${fmt.ctLabel}（二）`;
+    store.set('localStorage', KEYS.format, JSON.stringify(fmt));
+    applyFormat();
+  }
+  // 把欄位名稱套到畫面上所有地方
+  function applyFormat() {
+    $('label[for="keyPoints"]').textContent = fmt.kpLabel;
+    $('label[for="contact"]').textContent = fmt.ctLabel;
+    updateCounts();
+    renderBatchResults();
+    if ($('.peek').open) updatePeek();
+  }
+
+  function setPublicMode(on) {
+    const from = on ? 'localStorage' : 'sessionStorage';
+    const to = on ? 'sessionStorage' : 'localStorage';
+    DATA_KEYS.forEach((k) => {
+      const v = store.get(from, KEYS[k]);
+      if (v !== null) store.set(to, KEYS[k], v);
+      store.del(from, KEYS[k]);
+    });
+    if (on) {
+      store.set('localStorage', KEYS.publicMode, '1');
+      const key = getApiKey();
+      if (key) setApiKey(key, false); // 金鑰改成只記在這個分頁
+    } else {
+      store.del('localStorage', KEYS.publicMode);
+    }
+    $('#rememberKey').checked = isKeyRemembered();
+    $('#rememberKey').disabled = on;
+    renderPublicBanner();
+  }
+  function renderPublicBanner() {
+    $('#publicBanner').hidden = !isPublicMode();
+  }
+
+  // ---------- 新手上路 ----------
+  function openHelp() {
+    store.set('localStorage', KEYS.onboarded, '1'); // 看過一次就不再自動跳出
+    $('#helpDialog').showModal();
   }
 
   async function loadModelsInto(key) {
@@ -1556,7 +1760,7 @@
       const kp = $('#keyPoints').value.trim();
       const ct = $('#contact').value.trim();
       if (!kp && !ct) { toast('內容是空的', 'error'); return; }
-      toast((await copyText(`輔導內容重點：${kp}\n\n聯繫內容：${ct}`)) ? '已複製全部 ✓' : '複製失敗');
+      toast((await copyText(`${fmt.kpLabel}：${kp}\n\n${fmt.ctLabel}：${ct}`)) ? '已複製全部 ✓' : '複製失敗');
     });
 
     // 模式切換
@@ -1599,6 +1803,12 @@
       if (!ta) return;
       const k = ta.closest('.batch-card').dataset.seat;
       if (batch.results[k]) { batch.results[k][ta.dataset.field] = ta.value; saveBatchSoon(); }
+      const cnt = ta.closest('.batch-card').querySelector(`[data-count="${ta.dataset.field}"]`);
+      if (cnt) {
+        const c = countText(ta.value, ta.dataset.field);
+        cnt.textContent = c.label;
+        cnt.classList.toggle('over', c.over);
+      }
     });
 
     // 設定
@@ -1635,6 +1845,56 @@
       $('#historyDialog').showModal();
     });
     $('#btnBackup').addEventListener('click', exportBackup);
+    ['#historySearch', '#historyStudent', '#historyFrom', '#historyTo'].forEach((sel) => {
+      $(sel).addEventListener(sel === '#historySearch' ? 'input' : 'change', renderHistory);
+    });
+    $('#btnClearFilter').addEventListener('click', () => {
+      ['#historySearch', '#historyStudent', '#historyFrom', '#historyTo'].forEach((sel) => { $(sel).value = ''; });
+      renderHistory();
+    });
+    $('#btnPrintHistory').addEventListener('click', printHistory);
+
+    // 追蹤輔導
+    $('#studentName').addEventListener('input', () => refreshFollowup());
+    $('#followupOn').addEventListener('change', () => {
+      $('#followupSelect').disabled = !$('#followupOn').checked;
+      saveDraftSoon();
+      if ($('.peek').open) updatePeek();
+    });
+
+    // 學校格式
+    ['#fmtKpLabel', '#fmtCtLabel', '#fmtKpMax', '#fmtCtMax'].forEach((sel) => {
+      $(sel).addEventListener('change', saveFormatFromInputs);
+      $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveFormatFromInputs(); } });
+    });
+    $('#btnFmtReset').addEventListener('click', () => {
+      fmt = { ...DEFAULT_FORMAT };
+      store.del('localStorage', KEYS.format);
+      fillFormatInputs();
+      applyFormat();
+      toast('已恢復預設格式');
+    });
+
+    // 公用電腦模式
+    $('#publicMode').addEventListener('change', (e) => {
+      const on = e.target.checked;
+      const msg = on
+        ? '開啟公用電腦模式後，草稿、批次、紀錄本與名冊只會保留在「這個分頁」，關閉分頁就會清除，金鑰也不會記住。\n\n建議先到紀錄本「備份成檔案」。確定開啟？'
+        : '關閉公用電腦模式後，資料會改存在這台電腦的瀏覽器裡（關閉分頁也會保留）。確定關閉？';
+      if (!confirm(msg)) { e.target.checked = !on; return; }
+      setPublicMode(on);
+      toast(on ? '已開啟公用電腦模式 🔒' : '已關閉公用電腦模式');
+    });
+    $('#btnPublicOff').addEventListener('click', () => {
+      if (!confirm('關閉公用電腦模式後，資料會改存在這台電腦的瀏覽器裡。確定關閉？')) return;
+      setPublicMode(false);
+      toast('已關閉公用電腦模式');
+    });
+
+    // 新手上路
+    $('#btnHelp').addEventListener('click', openHelp);
+    $$('.footer-link').forEach((b) => b.addEventListener('click', () => $(`#${b.dataset.footer}`).click()));
+    $('#btnHelpKey').addEventListener('click', () => { $('#helpDialog').close(); openSettings(); });
     $('#btnRestore').addEventListener('click', () => $('#restoreFile').click());
     $('#restoreFile').addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
@@ -1671,6 +1931,7 @@
 
   // ---------- 啟動 ----------
   renderStatic();
+  renderPublicBanner();
   if (!loadDraft()) fillForm({ date: todayStr() });
   if (!$('#date').value) $('#date').value = todayStr();
   updateCounts();
@@ -1683,5 +1944,10 @@
   renderBatchResults();
   setupSpeech();
   bind();
+  applyFormat();
   switchView(store.get('localStorage', KEYS.view) === 'batch' ? 'batch' : 'single');
+  // 第一次來的老師自動顯示使用說明
+  if (!store.get('localStorage', KEYS.onboarded) && !/[?&]swdemo=1/.test(location.search)) {
+    setTimeout(() => { if (!document.querySelector('dialog[open]')) openHelp(); }, 500);
+  }
 })();

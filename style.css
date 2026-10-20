@@ -358,7 +358,7 @@ input:focus, select:focus, textarea:focus {
 }
 @media (max-width: 640px) {
   .brand p { display: none; }
-  .brand h1 { font-size: 1.3rem; }
+  .brand h1 { font-size: 1.22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar { gap: 8px; }
   .brand { gap: 10px; }
   .top-actions { gap: 6px; }
@@ -434,3 +434,120 @@ input:focus, select:focus, textarea:focus {
 .seat.active.entered { background: var(--primary); color: #fff; }
 .lg.entered { background: #d8efe1; border-color: #7bbf98; }
 @media (prefers-reduced-motion: reduce) { .batch-card.flash { animation: none; } }
+
+/* ===== 公用電腦模式、使用說明、追蹤輔導、學校格式、紀錄本篩選 ===== */
+.public-banner {
+  max-width: 1600px; margin: 12px auto 0; padding: 10px clamp(16px, 3vw, 40px);
+  background: #fff4e5; border-top: 1px solid #f1d2a8; border-bottom: 1px solid #f1d2a8;
+  color: #7a4a14; font-size: var(--fs-sm); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center;
+}
+.public-banner .link-btn { color: #7a4a14; }
+.help-btn {
+  margin-left: auto; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  padding: 10px 16px; border-radius: 12px; font-weight: 600; cursor: pointer;
+}
+.help-btn:hover { border-color: var(--primary); }
+.modal { overflow: auto; }
+.dialog-section { font-size: var(--fs-md); margin: 22px 0 8px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.modal-inner > .dialog-section:first-of-type { border-top: 0; padding-top: 0; margin-top: 8px; }
+.format-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 0 12px; }
+input[type="number"] {
+  width: 100%; padding: 10px 12px; background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+}
+input[type="number"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(47, 111, 98, .18); }
+.count.over { color: var(--danger); font-weight: 700; }
+
+.followup-box { margin: -4px 0 16px; padding: 12px 14px; border-radius: 12px; background: #eef5fb; border: 1px solid #c9dcee; }
+.followup-title { margin: 0 0 6px; font-weight: 700; color: #234a6b; }
+.followup-box select { margin-top: 6px; }
+.followup-box select:disabled { opacity: .6; }
+
+.help { width: min(680px, calc(100vw - 32px)); }
+.help-steps { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.help-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--primary-soft); }
+.help-steps p { margin: 2px 0 0; font-size: var(--fs-sm); color: #2f4f48; }
+.help-num { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 800; }
+.help-key, .help-tips { margin: 0 0 10px; padding-left: 1.4em; display: grid; gap: 6px; }
+
+.history-filters { display: grid; grid-template-columns: 1.3fr 1.3fr 1fr 1fr; gap: 8px; }
+.date-range { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--muted); }
+.date-range input { min-width: 0; }
+.history-summary-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.history-summary { margin: 0; font-size: var(--fs-sm); color: var(--primary); font-weight: 600; }
+.history-student { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; font-size: var(--fs-base); color: var(--ink); cursor: pointer; border-bottom: 1px dotted currentColor; }
+.history-student:hover { color: var(--primary); }
+.history-list.timeline { border-left: 3px solid var(--primary-soft); padding-left: 12px; }
+.tl-no { background: var(--primary); color: #fff; border-radius: 999px; padding: 0 10px; font-size: var(--fs-xs); font-weight: 700; }
+.drawer { width: min(860px, calc(100vw - 32px)); }
+
+@media (max-width: 640px) {
+  .help-btn { flex: 0 0 auto; padding: 9px 12px; }
+  .help-btn .label { display: none; }
+  .format-grid { grid-template-columns: 1fr 1fr; }
+  .history-filters { grid-template-columns: 1fr 1fr; }
+  .history-filters input[type="search"], .history-filters select { grid-column: 1 / -1; }
+}
+
+@media print {
+  #printArea .print-sub { margin: -6pt 0 12pt; text-align: center; color: #444; }
+  #printArea section p + p { margin-top: 4pt; }
+}
+
+/* ===== 頁尾（2026-10-20 重新設計：品牌區＋特色重點＋快速連結＋署名列） ===== */
+.site-footer {
+  margin-top: 36px; padding: 0; text-align: left; color: var(--muted); font-size: var(--fs-sm);
+  background: linear-gradient(180deg, #f1ebdf 0%, #ebe3d3 100%); border-top: 1px solid var(--line);
+}
+.site-footer::before {
+  content: ""; display: block; height: 4px;
+  background: linear-gradient(90deg, var(--primary) 0%, #4f9a87 55%, var(--accent) 100%);
+}
+.site-footer p { margin: 0; }
+.footer-inner {
+  max-width: 1600px; margin: 0 auto; padding: 32px clamp(16px, 3vw, 40px) 26px;
+  display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.2fr) auto; gap: 24px 40px; align-items: start;
+}
+.footer-brand { display: flex; gap: 14px; align-items: center; }
+.footer-brand img { flex: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(47, 111, 98, .18); }
+.footer-brand strong { display: block; color: var(--ink); font-size: var(--fs-md); letter-spacing: .02em; }
+.footer-brand span { display: block; margin-top: 2px; line-height: 1.5; }
+.footer-points { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 22px; }
+.footer-points li { display: flex; gap: 10px; align-items: flex-start; }
+.fp-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(255, 255, 255, .75); border: 1px solid var(--line); font-size: 1.15rem; }
+.footer-points strong { display: block; color: var(--ink); font-size: var(--fs-sm); }
+.footer-points small { display: block; font-size: var(--fs-sm); line-height: 1.55; }
+.footer-links { display: flex; flex-direction: column; gap: 4px; }
+.footer-link {
+  border: 0; background: none; text-align: left; color: var(--primary); font-weight: 700;
+  font-size: var(--fs-sm); padding: 5px 0; cursor: pointer; white-space: nowrap;
+}
+.footer-link:hover { color: var(--accent); }
+.footer-link:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; border-radius: 6px; }
+.footer-bottom {
+  max-width: 1600px; margin: 0 auto; padding: 14px clamp(16px, 3vw, 40px) 24px;
+  border-top: 1px solid rgba(60, 40, 10, .08);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+}
+.footer-school { color: var(--muted); }
+.site-footer .version-tag {
+  font-size: var(--fs-xs); opacity: 1; letter-spacing: .03em; color: var(--muted);
+  background: rgba(255, 255, 255, .7); border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px;
+}
+@media (max-width: 1080px) {
+  .footer-inner { grid-template-columns: 1fr auto; }
+  .footer-points { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  .footer-inner { grid-template-columns: 1fr; gap: 20px; padding-top: 26px; }
+  .footer-points { grid-template-columns: 1fr; grid-row: auto; }
+  .footer-links { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .footer-link { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
+  .footer-bottom { flex-direction: column; text-align: center; }
+  .footer-school { display: block; margin-top: 2px; }
+  .footer-dot { display: none; }
+
+  /* 紀錄本篩選：日期欄各占一整列，「清除篩選」不換行 */
+  .history-filters .date-range { grid-column: 1 / -1; }
+}
+.date-range input { flex: 1; width: 100%; }
+.history-summary-row .link-btn { flex: none; white-space: nowrap; }
