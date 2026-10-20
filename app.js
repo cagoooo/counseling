@@ -7,9 +7,29 @@
     model: 'crh.model',
     history: 'crh.history',
     draft: 'crh.draft',
+    batch: 'crh.batch',
+    view: 'crh.view',
   };
 
   const CATEGORIES = ['人際關係', '情緒困擾', '學習適應', '生活常規', '行為偏差', '家庭關係', '身心健康', '校園安全', '生涯興趣', '其他'];
+  // 國小常見狀況標籤（依類別分組；點選後會自動勾選所屬類別）
+  const DETAILS_MAP = {
+    生活常規: ['遲到', '作業缺交', '上課干擾', '忘記帶用品', '整潔習慣待加強', '不當使用 3C', '說髒話', '破壞公物'],
+    學習適應: ['注意力不集中', '學習動機低落', '成績退步', '作業品質不佳', '上課打瞌睡', '考試焦慮'],
+    情緒困擾: ['情緒低落', '焦慮緊張', '易怒衝動', '哭泣不止', '退縮不語', '自傷言語或行為'],
+    人際關係: ['同儕衝突', '肢體碰撞', '言語嘲笑', '被排擠', '疑似霸凌', '網路不當留言'],
+    行為偏差: ['頂撞師長', '說謊', '拿取他人物品'],
+    家庭關係: ['家長反映', '作息不正常', '親子衝突', '家庭變故', '疑似受虐或疏忽'],
+    校園安全: ['危險行為', '奔跑受傷', '攜帶危險物品'],
+    身心健康: ['身體不適', '飲食問題', '睡眠不足'],
+  };
+  const DETAIL_TO_CAT = Object.fromEntries(Object.entries(DETAILS_MAP).flatMap(([cat, tags]) => tags.map((t) => [t, cat])));
+  // 可能屬於法定通報事項的標籤
+  const SENSITIVE_TAGS = ['自傷言語或行為', '疑似霸凌', '疑似受虐或疏忽', '攜帶危險物品'];
+  const ACTIONS = ['傾聽與同理', '口頭提醒規勸', '引導換位思考', '約定改善目標', '給予正向鼓勵', '安排同儕協助', '調整座位', '聯絡家長', '轉介輔導室', '持續觀察'];
+  const METHODS = ['個別晤談', '團體晤談', '電話聯繫', '聯絡簿', '家庭訪問', '線上訊息', '其他'];
+  const LOCATIONS = ['原班教室', '導師辦公室', '輔導室', '走廊', '操場', '健康中心', '電話／線上'];
+
   const OTHER_CODES = ['乙生', '丙生', '丁生', '戊生', '己生', '庚生', '辛生', '壬生', '癸生'];
   const TARGET_LABEL = {
     student: '學生本人（教師未聯繫家長）',
@@ -28,48 +48,59 @@
     normal: { kp: '30～60 字', ct: '150～250 字' },
     long: { kp: '40～80 字', ct: '250～400 字' },
   };
+  const REWRITE_RULE = {
+    gentle: '改寫得更溫和、更具同理心，多描述學生的努力與成長的可能，但不得改變任何事實。',
+    objective: '改寫得更客觀中立，刪除主觀評價、推測與情緒性字眼，只保留可觀察的行為與具體處置。',
+    concise: '在不遺漏關鍵事實的前提下改寫得更精簡，篇幅約為原本的六成。',
+    detail: '在不捏造任何新事實的前提下，把敘述寫得更完整通順，讓事件脈絡、教師引導與後續做法的銜接更清楚。',
+  };
+  const REWRITE_LABEL = { gentle: '更溫和', objective: '更客觀', concise: '更精簡', detail: '更完整' };
 
   const TEMPLATES = [
     {
-      label: '同儕衝突', cats: ['人際關係', '生活常規'],
+      label: '同儕衝突', cats: ['人際關係', '生活常規'], details: ['同儕衝突', '肢體碰撞'], actions: ['傾聽與同理', '引導換位思考'],
       event: '下課時他和同學在走廊搶球，一生氣推了同學一把，同學跌倒膝蓋擦傷。他一開始覺得是對方先搶球，不覺得自己有錯。',
       handling: '先確認受傷的同學到保健室處理，再分別聽兩人說明經過。引導他說出當下生氣的感受，討論推人可能造成的危險，一起想下次生氣時可以先深呼吸、用說的或請老師幫忙。',
       response: '他冷靜後承認推人不對，主動向同學道歉，說下次會先用說的。',
     },
     {
-      label: '上課分心', cats: ['學習適應'],
+      label: '上課分心', cats: ['學習適應'], details: ['注意力不集中', '作業品質不佳'], actions: ['約定改善目標', '調整座位'],
       event: '最近數學課常玩橡皮擦、和隔壁同學講話，提醒後很快又分心，習作也常寫不完。',
       handling: '下課找他個別聊聊，了解是聽不懂還是覺得無聊。他說分數的部分聽不太懂。和他約定上課不懂就舉手，並把座位調到靠近老師，下課利用十分鐘一起複習。',
       response: '他願意試試看，說會先把習作完成再去玩。',
     },
     {
-      label: '作業缺交', cats: ['學習適應', '生活常規'],
+      label: '作業缺交', cats: ['學習適應', '生活常規'], details: ['作業缺交'], actions: ['約定改善目標', '安排同儕協助'],
       event: '這兩週作業缺交五次，問他都說忘記帶或沒寫。',
       handling: '和他一起檢查聯絡簿的登記習慣，教他回家先看聯絡簿、寫完一項就打勾，並約定每天放學前由小老師提醒他。',
       response: '他說回家常常先看電視就忘了，答應會先寫完作業再看電視。',
     },
     {
-      label: '情緒低落', cats: ['情緒困擾', '人際關係'],
+      label: '情緒低落', cats: ['情緒困擾', '人際關係'], details: ['情緒低落', '退縮不語'], actions: ['傾聽與同理', '持續觀察'],
       event: '這幾天看起來悶悶不樂，下課都一個人坐在位子上，問他也只說沒事。',
       handling: '利用午休個別陪伴聊天，先聊他喜歡的事，再慢慢問近況。他說好朋友最近都跟別人玩，覺得被冷落。老師同理他的感受，和他討論可以主動邀請同學一起玩，也可以多認識其他同學。',
       response: '他說明天想試著邀好朋友一起打躲避球，也知道有心事可以找老師說。',
     },
     {
-      label: '危險行為', cats: ['校園安全', '生活常規'],
+      label: '危險行為', cats: ['校園安全', '生活常規'], details: ['危險行為'], actions: ['口頭提醒規勸', '引導換位思考'],
       event: '美勞課時拿著剪刀在教室裡揮來揮去玩鬧，差點刺到旁邊的同學。',
       handling: '立刻請他放下剪刀，課後個別說明剪刀的正確使用方式和可能造成的傷害，請他想想如果被刺到的是自己會有什麼感覺。',
       response: '他了解這樣很危險，向同學道歉，答應之後會正確使用剪刀。',
     },
     {
-      label: '遲到常規', cats: ['生活常規'],
+      label: '遲到常規', cats: ['生活常規'], details: ['遲到', '作息不正常'], actions: ['約定改善目標'],
       event: '這個月已經遲到六次，常錯過早自習。他說早上爸媽很早出門，自己起不來。',
       handling: '和他討論前一晚的作息，建議早點睡並自己設定鬧鐘，同時說明準時到校的重要。',
       response: '他答應今晚十點前睡覺，並試著用鬧鐘自己起床。',
     },
   ];
 
+  const SEAT_MAX = 35;
+  const BATCH_LIMIT = 10;
+
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ---------- 儲存（私密視窗或封鎖儲存時不會壞） ----------
   const store = {
@@ -120,6 +151,8 @@
     const [y, m, d] = iso.split('-').map(Number);
     return `${y - 1911} 年 ${m} 月 ${d} 日`;
   }
+  const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const categoriesFromDetails = (details) => [...new Set(details.map((d) => DETAIL_TO_CAT[d]).filter(Boolean))];
 
   async function copyText(text) {
     try {
@@ -139,9 +172,44 @@
     }
   }
 
-  // ---------- 表單 ----------
+  // ---------- 標籤 UI ----------
+  function tagLibHtml(selected = []) {
+    return Object.entries(DETAILS_MAP).map(([cat, tags]) => `
+      <div class="tag-group">
+        <h4>${cat}</h4>
+        <div class="chips small">${tags.map((t) => {
+          const on = selected.includes(t);
+          const warn = SENSITIVE_TAGS.includes(t) ? ' warn-tag' : '';
+          return `<button type="button" class="chip-btn${on ? ' on' : ''}${warn}" data-tag="${t}" aria-pressed="${on}">${t}</button>`;
+        }).join('')}</div>
+      </div>`).join('');
+  }
+  function actionsHtml(selected = []) {
+    return ACTIONS.map((a) => {
+      const on = selected.includes(a);
+      return `<button type="button" class="chip-btn action${on ? ' on' : ''}" data-action="${a}" aria-pressed="${on}">${a}</button>`;
+    }).join('');
+  }
+  function toggleChip(btn) {
+    const on = !btn.classList.contains('on');
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', on);
+    return on;
+  }
+  function renderReportNotice(el, details) {
+    const hits = details.filter((d) => SENSITIVE_TAGS.includes(d));
+    el.hidden = !hits.length;
+    if (hits.length) {
+      el.innerHTML = `⚠️ 你點選了「${hits.map(escapeHtml).join('」「')}」。這類事件可能屬於<strong>法定通報事項</strong>（如兒少保護、校安通報、校園霸凌），請依學校流程在時限內完成通報，並告知輔導室與學務處。輔導紀錄只是紀錄，不能取代通報。`;
+    }
+  }
+
   function renderStatic() {
     $('#categories').innerHTML = CATEGORIES.map((c) => `<label><input type="checkbox" value="${c}"><span>${c}</span></label>`).join('');
+    $$('.method-select').forEach((s) => { s.innerHTML = METHODS.map((m) => `<option>${m}</option>`).join(''); });
+    $('#location').innerHTML = `<option value="">（不指定）</option>${LOCATIONS.map((l) => `<option>${l}</option>`).join('')}`;
+    $('#singleTagLib').innerHTML = tagLibHtml();
+    $('#singleActions').innerHTML = actionsHtml();
     const tplBox = $('#templates');
     TEMPLATES.forEach((t, i) => {
       const b = document.createElement('button');
@@ -153,6 +221,10 @@
     });
   }
 
+  // ---------- 個別輔導表單 ----------
+  const selectedDetails = () => $$('#singleTagLib .chip-btn.on').map((b) => b.dataset.tag);
+  const selectedActions = () => $$('#singleActions .chip-btn.on').map((b) => b.dataset.action);
+
   function readForm() {
     return {
       studentName: $('#studentName').value.trim(),
@@ -161,7 +233,10 @@
       date: $('#date').value,
       target: ($('input[name=target]:checked') || {}).value || 'student',
       method: $('#method').value,
+      location: $('#location').value,
       categories: $$('#categories input:checked').map((i) => i.value),
+      details: selectedDetails(),
+      actions: selectedActions(),
       event: $('#event').value.trim(),
       handling: $('#handling').value.trim(),
       response: $('#response').value.trim(),
@@ -169,6 +244,14 @@
       tone: ($('input[name=tone]:checked') || {}).value || 'neutral',
       restoreNames: $('#restoreNames').checked,
     };
+  }
+
+  function setChips(container, attr, values) {
+    $$(`${container} .chip-btn`).forEach((b) => {
+      const on = values.includes(b.dataset[attr]);
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
+    });
   }
 
   function fillForm(f) {
@@ -179,13 +262,24 @@
     $('#date').value = f.date || todayStr();
     $$('input[name=target]').forEach((r) => { r.checked = r.value === (f.target || 'student'); });
     $('#method').value = f.method || '個別晤談';
+    $('#location').value = f.location || '';
     $$('#categories input').forEach((c) => { c.checked = (f.categories || []).includes(c.value); });
+    setChips('#singleTagLib', 'tag', f.details || []);
+    setChips('#singleActions', 'action', f.actions || []);
     $('#event').value = f.event || '';
     $('#handling').value = f.handling || '';
     $('#response').value = f.response || '';
     $$('input[name=length]').forEach((r) => { r.checked = r.value === (f.length || 'normal'); });
     $$('input[name=tone]').forEach((r) => { r.checked = r.value === (f.tone || 'neutral'); });
     $('#restoreNames').checked = !!f.restoreNames;
+    refreshSingleTagState();
+  }
+
+  function refreshSingleTagState() {
+    const details = selectedDetails();
+    $('#detailCount').textContent = details.length ? `已選 ${details.length}` : '';
+    $('#eventReq').textContent = details.length ? '可只寫補充' : '必填';
+    renderReportNotice($('#reportNotice'), details);
   }
 
   let draftTimer;
@@ -214,7 +308,7 @@
   }
 
   // ---------- 去識別化 ----------
-  const splitNames = (s) => s.split(/[,，、;；\s]+/).map((x) => x.trim()).filter((x) => x.length >= 2);
+  const splitNames = (s) => (s || '').split(/[,，、;；\s]+/).map((x) => x.trim()).filter((x) => x.length >= 2);
 
   function buildAliases(form) {
     const list = [];
@@ -248,57 +342,74 @@
   }
 
   // ---------- 提示詞 ----------
-  function buildMessages(form, mode) {
-    const aliases = buildAliases(form);
-    const len = LENGTH_SPEC[form.length] || LENGTH_SPEC.normal;
-    const tone = form.tone === 'warm'
+  function systemRules(c) {
+    const len = LENGTH_SPEC[c.length] || LENGTH_SPEC.normal;
+    const tone = c.tone === 'warm'
       ? '語氣溫暖、正向、具同理心，肯定學生的努力，但仍維持專業書面用語。'
       : '語氣客觀、中性、專業，避免情緒性字眼。';
-
-    const system = [
+    return [
       '### 角色',
-      '你是一位經驗豐富的臺灣國小導師，熟悉學校「學生輔導資料紀錄表」的撰寫方式。你的任務是把老師口語、零散的描述，整理成可以直接登錄到校務系統的正式輔導紀錄。',
+      '你是一位經驗豐富的臺灣國小導師，熟悉學校「學生輔導資料紀錄表」的撰寫方式。你的任務是把老師口語、零散的描述或點選的標籤，整理成可以直接登錄到校務系統的正式輔導紀錄。',
       '',
       '### 輸出內容',
       `1.「輔導內容重點」：用一段話簡要說明發生了什麼事（約 ${len.kp}）。`,
       `2.「聯繫內容」：用一段話詳細描述事件經過、教師如何處理與引導學生，以及學生未來可以怎麼做（約 ${len.ct}）。`,
       '',
       '### 撰寫規則',
-      '- 一律使用繁體中文與臺灣慣用語，採書面語、第三人稱。',
-      '- 兩個部分各自只能是「一個段落」，不要條列、不要換行、不要另加標題。',
-      '- 主角學生在資料中以「甲生」代稱，輸出時一律稱為「該生」；其他人物保留資料中的代稱（如乙生、丙生），不得自行編造姓名。',
-      `- ${TARGET_RULE[form.target] || TARGET_RULE.student}`,
-      '- 只根據老師提供的資訊撰寫，不得捏造未提及的事件、對話、診斷或結果；資訊不足時用概括的方式描述，不要自行補細節。',
+      '- 一律使用繁體中文與臺灣慣用語，採書面語、第三人稱的教師紀錄視角。',
+      '- 兩個部分各自只能是「一個段落」，不要條列、不要換行、不要另加標題，也不要在開頭寫姓名、日期、地點等欄位標籤。',
+      '- 主角學生一律稱為「該生」（資料中可能寫作「甲生」）；其他人物保留資料中的代稱（如乙生、丙生），不得自行編造姓名。',
+      `- ${TARGET_RULE[c.target] || TARGET_RULE.student}`,
+      '- 只根據老師提供的資訊撰寫，不得捏造未提及的事件、對話、診斷或結果，也不要推測學生的心理狀態或家庭背景；資訊不足時用概括的方式描述。',
       '- 把口語轉為專業描述（例如「他說好」→「該生表示願意嘗試」、「很兇」→「情緒較為激動」），避免標籤化或貶抑字眼，不做醫療或心理診斷。',
+      '- 這是事件紀錄，不是期末評語：不要寫「期許你…」「是個乖巧的孩子」這類對話句或評價句。',
       '- 「聯繫內容」依序包含：事件經過 → 教師的處理與引導 → 學生的反應或承諾 → 後續可行的做法或教師將持續觀察的重點。',
       `- ${tone}`,
     ];
+  }
+
+  // 把一位學生的資料轉成「輔導資料」區塊（文字已去識別化）
+  function caseLines(c, di) {
+    const lines = [
+      `- 日期：${c.date ? rocDate(c.date) : '未提供'}`,
+      `- 年級：${c.grade || '未提供'}`,
+      `- 輔導對象：${TARGET_LABEL[c.target] || TARGET_LABEL.student}`,
+      `- 輔導方式：${c.method}`,
+    ];
+    if (c.location) lines.push(`- 晤談地點：${c.location}`);
+    lines.push(`- 輔導類別：${c.categories.length ? c.categories.join('、') : '未指定'}`);
+    if (c.details.length) lines.push(`- 狀況細節（老師點選）：${c.details.join('、')}`);
+    if (c.actions.length) lines.push(`- 教師處置（老師點選）：${c.actions.join('、')}`);
+    lines.push(`- 事件經過：${c.event ? di(c.event) : '（老師未另外描述，請依狀況細節概括撰寫，不要捏造具體情節）'}`);
+    if (c.handling) lines.push(`- 教師的處理與引導：${di(c.handling)}`);
+    else lines.push(`- 教師的處理與引導：${c.actions.length ? '（請依上述教師處置概括描述）' : '（老師未填寫，請依事件性質以一般合宜的輔導方式概括描述，不要捏造具體對話）'}`);
+    lines.push(`- 學生的回應與後續：${c.response ? di(c.response) : '（老師未填寫，請勿捏造學生的具體承諾，可寫教師將持續觀察）'}`);
+    return lines;
+  }
+
+  function buildMessages(form, mode) {
+    const aliases = buildAliases(form);
+    const c = { ...form, target: effectiveTarget(form.target, form.actions) };
+    const system = systemRules(c);
     if (mode === 'json') {
       system.push('', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。');
     } else {
       system.push('', '### 輸出格式', '只輸出以下兩段，不要有其他說明：', '輔導內容重點：（一段文字）', '', '聯繫內容：（一段文字）');
     }
-
     const di = (s) => deidentify(s, aliases);
-    const user = [
-      '### 輔導資料',
-      `- 日期：${form.date ? rocDate(form.date) : '未提供'}`,
-      `- 年級：${form.grade || '未提供'}`,
-      `- 輔導對象：${TARGET_LABEL[form.target]}`,
-      `- 輔導方式：${form.method}`,
-      `- 輔導類別：${form.categories.length ? form.categories.join('、') : '未指定'}`,
-      `- 事件經過：${di(form.event)}`,
-      `- 教師的處理與引導：${form.handling ? di(form.handling) : '（老師未填寫，請依事件性質以一般合宜的輔導方式概括描述，不要捏造具體對話）'}`,
-      `- 學生的回應與後續：${form.response ? di(form.response) : '（老師未填寫，請勿捏造學生的具體承諾，可寫教師將持續觀察）'}`,
-    ];
-
+    const user = ['### 輔導資料', ...caseLines(c, di)];
     return { system: system.join('\n'), user: user.join('\n'), aliases };
+  }
+
+  // 勾了「聯絡家長」卻選「只和學生談」時，改用「學生＋家長」的規則，避免互相矛盾
+  function effectiveTarget(target, actions = []) {
+    return target === 'student' && actions.includes('聯絡家長') ? 'both' : target;
   }
 
   function updatePeek() {
     const form = readForm();
-    if (!form.event) {
-      $('#peek').textContent = '（先填寫事件經過）';
+    if (!form.event && !form.details.length) {
+      $('#peek').textContent = '（先填寫事件經過或點選常見狀況）';
       return;
     }
     const { system, user } = buildMessages(form, 'chat');
@@ -333,7 +444,7 @@
   function friendlyError(e) {
     if (e instanceof ApiError) {
       const m = e.message || '';
-      if (/API key not valid|API_KEY_INVALID/i.test(m)) return '金鑰無效，請到「AI 設定」確認有沒有貼完整。';
+      if (/API key not valid|API_KEY_INVALID/i.test(m)) return '金鑰無效，請確認有沒有貼完整。';
       if (e.status === 400) return `請求格式有誤：${m.slice(0, 120)}`;
       if (e.status === 401 || e.status === 403) return '金鑰沒有權限或已被停用，請到 Google AI Studio 確認。';
       if (e.status === 404) return '這個模型已停用或不存在，請到「AI 設定」按「重新抓取」換一個模型。';
@@ -344,6 +455,7 @@
     if (e && e.name === 'TypeError') return '網路連線失敗，請確認網路後再試。';
     return e?.message || '發生未知錯誤';
   }
+  const isFatal = (e) => e instanceof ApiError && [400, 401, 403, 404, 429].includes(e.status);
 
   const EXCLUDE_MODEL = /(embedding|tts|image|audio|live|native|computer-use|robotics|aqa|learnlm|veo|imagen|banana)/i;
   function rankModel(id) {
@@ -367,10 +479,12 @@
       .sort((a, b) => rankModel(b.id) - rankModel(a.id));
   }
 
-  async function callGemini(system, user) {
+  // 伺服器忙碌（429/500/503）時自動等待重試；金鑰或格式錯誤則直接回報
+  const RETRY_DELAYS = [2000, 4000, 8000];
+  async function callGemini(system, user, { onRetry } = {}) {
     const key = getApiKey();
     const model = getModel();
-    const body = {
+    const body = JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],
       generationConfig: {
@@ -382,18 +496,19 @@
           required: ['key_points', 'contact'],
         },
       },
-    };
+    });
     let res;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; ; attempt += 1) {
       res = await fetch(`${API_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(body),
+        body,
       });
-      if (res.status !== 503) break;
-      await new Promise((r) => setTimeout(r, 1500));
+      if (res.ok) break;
+      if (![429, 500, 503].includes(res.status) || attempt >= RETRY_DELAYS.length) throw await toApiError(res);
+      if (onRetry) onRetry(attempt + 1, RETRY_DELAYS[attempt]);
+      await sleep(RETRY_DELAYS[attempt]);
     }
-    if (!res.ok) throw await toApiError(res);
     const data = await res.json();
     const cand = data?.candidates?.[0];
     const text = (cand?.content?.parts || []).map((p) => p.text || '').join('');
@@ -412,34 +527,52 @@
     return models[0].id;
   }
 
-  // ---------- 產生 ----------
+  function requireKey(altHint) {
+    if (getApiKey()) return true;
+    openSettings(`先設定 Gemini API 金鑰；或關掉這個視窗，改用「${altHint}」。`);
+    return false;
+  }
+
+  // ---------- 個別輔導：產生與改寫 ----------
   let busy = false;
-  function setBusy(on) {
+  function setBusy(on, text = 'AI 正在撰寫紀錄…') {
     busy = on;
+    $('#overlayText').textContent = text;
     $('#btnGenerate').classList.toggle('loading', on);
-    $('#btnGenerate').disabled = on;
-    $('#btnRegenerate').disabled = on;
+    ['#btnGenerate', '#btnRegenerate', ...$$('[data-rewrite]').map((b) => b)].forEach((s) => {
+      (typeof s === 'string' ? $(s) : s).disabled = on;
+    });
     $('#outputCard').classList.toggle('busy', on);
+  }
+
+  let undoStack = null;
+  function rememberForUndo() {
+    const kp = $('#keyPoints').value;
+    const ct = $('#contact').value;
+    if (kp || ct) {
+      undoStack = { kp, ct };
+      $('#btnUndo').disabled = false;
+    }
   }
 
   async function generate() {
     if (busy) return;
     const form = readForm();
-    if (!form.event) {
-      toast('請先填寫「事件經過」', 'error');
+    if (!form.event && !form.details.length) {
+      toast('請填寫「事件經過」，或點選至少一個常見狀況', 'error');
       $('#event').focus();
       return;
     }
-    if (!getApiKey()) {
-      openSettings('先設定 Gemini API 金鑰；或關掉這個視窗，改用「不用金鑰：複製提示詞到 Gemini」。');
-      return;
-    }
+    if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
     const { system, user, aliases } = buildMessages(form, 'json');
     setBusy(true);
     setStatus('AI 整理中…');
     try {
       const model = await ensureModel();
-      const r = await callGemini(system, user);
+      const r = await callGemini(system, user, {
+        onRetry: (n) => { setStatus(`伺服器忙碌，第 ${n} 次重試…`); $('#overlayText').textContent = `伺服器忙碌，自動重試中（第 ${n} 次）…`; },
+      });
+      rememberForUndo();
       $('#keyPoints').value = postProcess(r.key_points, aliases, form.restoreNames);
       $('#contact').value = postProcess(r.contact, aliases, form.restoreNames);
       updateCounts();
@@ -449,20 +582,69 @@
         $('#outputCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     } catch (e) {
-      const msg = friendlyError(e);
       if (e instanceof ApiError && e.status === 404) setModel('');
       setStatus('產生失敗', 'err');
-      toast(msg, 'error', 6000);
+      toast(friendlyError(e), 'error', 6000);
     } finally {
       setBusy(false);
     }
   }
 
+  async function rewrite(kind) {
+    if (busy) return;
+    const kp0 = $('#keyPoints').value.trim();
+    const ct0 = $('#contact').value.trim();
+    if (!kp0 && !ct0) { toast('先產生紀錄，才能改寫', 'error'); return; }
+    if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
+    const form = readForm();
+    const aliases = buildAliases(form);
+    const c = { ...form, target: effectiveTarget(form.target, form.actions) };
+    const system = [...systemRules(c), '', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。'].join('\n');
+    const user = [
+      '### 目前的輔導紀錄',
+      `輔導內容重點：${deidentify(kp0, aliases)}`,
+      `聯繫內容：${deidentify(ct0, aliases)}`,
+      '',
+      '### 改寫指示',
+      REWRITE_RULE[kind],
+      '維持兩段式與上述所有撰寫規則，只輸出改寫後的結果。',
+    ].join('\n');
+    setBusy(true, `AI 正在改寫成「${REWRITE_LABEL[kind]}」版本…`);
+    setStatus('改寫中…');
+    try {
+      await ensureModel();
+      const r = await callGemini(system, user, { onRetry: (n) => setStatus(`伺服器忙碌，第 ${n} 次重試…`) });
+      rememberForUndo();
+      $('#keyPoints').value = postProcess(r.key_points, aliases, form.restoreNames);
+      $('#contact').value = postProcess(r.contact, aliases, form.restoreNames);
+      updateCounts();
+      saveDraft();
+      setStatus(`已改寫成「${REWRITE_LABEL[kind]}」✓ 不滿意可按復原`, 'ok');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) setModel('');
+      setStatus('改寫失敗', 'err');
+      toast(friendlyError(e), 'error', 6000);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function undo() {
+    if (!undoStack) return;
+    const cur = { kp: $('#keyPoints').value, ct: $('#contact').value };
+    $('#keyPoints').value = undoStack.kp;
+    $('#contact').value = undoStack.ct;
+    undoStack = cur;
+    updateCounts();
+    saveDraft();
+    setStatus('已切換回上一個版本（再按一次可切回來）', 'ok');
+  }
+
   let lastChatAliases = [];
   async function copyPrompt() {
     const form = readForm();
-    if (!form.event) {
-      toast('請先填寫「事件經過」', 'error');
+    if (!form.event && !form.details.length) {
+      toast('請填寫「事件經過」，或點選至少一個常見狀況', 'error');
       $('#event').focus();
       return;
     }
@@ -488,6 +670,7 @@
     }
     const aliases = lastChatAliases.length ? lastChatAliases : buildAliases(readForm());
     const restore = $('#restoreNames').checked;
+    rememberForUndo();
     $('#keyPoints').value = postProcess(r.key_points, aliases, restore);
     $('#contact').value = postProcess(r.contact, aliases, restore);
     $('#pasteText').value = '';
@@ -496,20 +679,342 @@
     setStatus('已從貼上內容拆段 ✓', 'ok');
   }
 
+  // ---------- 批次補登 ----------
+  let batch = loadBatch();
+  let batchBusy = false;
+
+  function newBatch() {
+    return {
+      seats: {},
+      active: null,
+      results: {},
+      common: { date: todayStr(), grade: '', target: 'student', method: '個別晤談', length: 'short', tone: 'neutral' },
+    };
+  }
+  function loadBatch() {
+    try {
+      const b = JSON.parse(store.get('localStorage', KEYS.batch) || 'null');
+      if (b && b.seats && b.results && b.common) return b;
+    } catch { /* 忽略 */ }
+    return newBatch();
+  }
+  let batchTimer;
+  function saveBatchSoon() {
+    clearTimeout(batchTimer);
+    batchTimer = setTimeout(() => store.set('localStorage', KEYS.batch, JSON.stringify(batch)), 300);
+  }
+  const seatKeys = (obj) => Object.keys(obj).map(Number).sort((a, b) => a - b).map(String);
+
+  function renderSeatGrid() {
+    const html = [];
+    for (let i = 1; i <= SEAT_MAX; i += 1) {
+      const k = String(i);
+      const cls = ['seat'];
+      if (batch.seats[k]) cls.push('selected');
+      if (batch.results[k]?.keyPoints || batch.results[k]?.contact) cls.push('done');
+      if (batch.active === k) cls.push('active');
+      html.push(`<button type="button" class="${cls.join(' ')}" data-seat="${k}" aria-pressed="${!!batch.seats[k]}" aria-label="${k} 號">${k}</button>`);
+    }
+    $('#seatGrid').innerHTML = html.join('');
+    $('#seatCount').textContent = `已選 ${Object.keys(batch.seats).length} / ${BATCH_LIMIT} 人`;
+  }
+
+  function renderSeatEditor() {
+    const k = batch.active;
+    const s = k && batch.seats[k];
+    $('#seatEditorEmpty').hidden = !!s;
+    $('#seatEditorBody').hidden = !s;
+    $('#btnRemoveSeat').hidden = !s;
+    $('#seatEditorName').textContent = s ? `${k} 號的狀況` : '勾選狀況';
+    if (!s) return;
+    $('#batchTagLib').innerHTML = tagLibHtml(s.details);
+    $('#batchActions').innerHTML = actionsHtml(s.actions);
+    $('#bNote').value = s.note || '';
+    renderReportNotice($('#bReportNotice'), s.details);
+  }
+
+  function fillBatchCommon() {
+    const c = batch.common;
+    $('#bDate').value = c.date || todayStr();
+    $('#bGrade').value = c.grade || '';
+    $('#bTarget').value = c.target || 'student';
+    $('#bMethod').value = c.method || '個別晤談';
+    $$('input[name=bLength]').forEach((r) => { r.checked = r.value === (c.length || 'short'); });
+    $$('input[name=bTone]').forEach((r) => { r.checked = r.value === (c.tone || 'neutral'); });
+  }
+  function readBatchCommon() {
+    batch.common = {
+      date: $('#bDate').value,
+      grade: $('#bGrade').value,
+      target: $('#bTarget').value,
+      method: $('#bMethod').value,
+      length: ($('input[name=bLength]:checked') || {}).value || 'short',
+      tone: ($('input[name=bTone]:checked') || {}).value || 'neutral',
+    };
+    saveBatchSoon();
+  }
+
+  function onSeatClick(e) {
+    const btn = e.target.closest('.seat');
+    if (!btn || batchBusy) return;
+    const k = btn.dataset.seat;
+    if (!batch.seats[k]) {
+      if (Object.keys(batch.seats).length >= BATCH_LIMIT) {
+        toast(`一次最多 ${BATCH_LIMIT} 位，先產生完這批再選下一批`, 'error');
+        return;
+      }
+      batch.seats[k] = { details: [], actions: [], note: '' };
+    }
+    batch.active = k;
+    renderSeatGrid();
+    renderSeatEditor();
+    saveBatchSoon();
+    if (window.matchMedia('(max-width: 1080px)').matches) $('.seat-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function removeActiveSeat() {
+    const k = batch.active;
+    if (!k) return;
+    delete batch.seats[k];
+    delete batch.results[k];
+    batch.active = null;
+    renderSeatGrid();
+    renderSeatEditor();
+    renderBatchResults();
+    saveBatchSoon();
+  }
+
+  function seatCase(k) {
+    const s = batch.seats[k];
+    const c = batch.common;
+    return {
+      date: c.date, grade: c.grade, method: c.method, location: '',
+      target: effectiveTarget(c.target, s.actions),
+      categories: categoriesFromDetails(s.details),
+      details: s.details, actions: s.actions,
+      event: s.note || '', handling: '', response: '',
+      length: c.length, tone: c.tone,
+    };
+  }
+  const seatHasInput = (k) => {
+    const s = batch.seats[k];
+    return s && (s.details.length || s.actions.length || (s.note || '').trim());
+  };
+
+  function setBatchProgress(done, total, text) {
+    $('#batchProgressText').textContent = text;
+    $('#batchBarFill').style.width = total ? `${Math.round((done / total) * 100)}%` : '0%';
+  }
+
+  async function batchGenerate() {
+    if (batchBusy) return;
+    readBatchCommon();
+    const selected = seatKeys(batch.seats);
+    if (!selected.length) { toast('先在左邊點選座號', 'error'); return; }
+    const empty = selected.filter((k) => !seatHasInput(k));
+    if (empty.length) {
+      toast(`${empty.join('、')} 號還沒點選任何狀況或寫補充說明`, 'error', 4500);
+      batch.active = empty[0];
+      renderSeatGrid();
+      renderSeatEditor();
+      return;
+    }
+    const todo = selected.filter((k) => !(batch.results[k]?.keyPoints || batch.results[k]?.contact));
+    if (!todo.length) { toast('這批都已經產生過了。要重寫某一位，請在結果卡片按「重寫」', 'error', 4500); return; }
+    if (!requireKey('複製提示詞')) return;
+
+    batchBusy = true;
+    $('#btnBatchGenerate').disabled = true;
+    $('#btnBatchGenerate').classList.add('loading');
+    let done = 0;
+    let failed = 0;
+    try {
+      const model = await ensureModel();
+      for (const k of todo) {
+        setBatchProgress(done, todo.length, `正在產生 ${k} 號（${done + 1} / ${todo.length}）…`);
+        const c = seatCase(k);
+        const system = [...systemRules(c), '', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。'].join('\n');
+        const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, []))].join('\n');
+        try {
+          const r = await callGemini(system, user, {
+            onRetry: (n) => setBatchProgress(done, todo.length, `${k} 號：伺服器忙碌，第 ${n} 次重試…`),
+          });
+          batch.results[k] = { keyPoints: postProcess(r.key_points, [], false), contact: postProcess(r.contact, [], false) };
+        } catch (e) {
+          failed += 1;
+          batch.results[k] = { keyPoints: '', contact: '', error: friendlyError(e) };
+          if (isFatal(e)) {
+            if (e.status === 404) setModel('');
+            toast(`已停止：${friendlyError(e)}`, 'error', 6000);
+            break;
+          }
+        }
+        done += 1;
+        renderBatchResults();
+        renderSeatGrid();
+        saveBatchSoon();
+        await sleep(400);
+      }
+      setBatchProgress(done, todo.length, failed ? `完成 ${done - failed} 位，${failed} 位失敗（可按「重寫」再試）` : `✓ 全部完成（${done} 位，${model}）`);
+      if (!failed) toast('批次產生完成 ✓');
+    } catch (e) {
+      setBatchProgress(done, todo.length, '產生失敗');
+      toast(friendlyError(e), 'error', 6000);
+    } finally {
+      batchBusy = false;
+      $('#btnBatchGenerate').disabled = false;
+      $('#btnBatchGenerate').classList.remove('loading');
+      renderBatchResults();
+    }
+  }
+
+  function renderBatchResults() {
+    const keys = seatKeys(batch.results);
+    const box = $('#batchResultList');
+    if (!keys.length) {
+      box.innerHTML = '<p class="empty-text">產生後，每位學生的紀錄會出現在這裡，可以直接修改。</p>';
+      return;
+    }
+    box.innerHTML = keys.map((k) => {
+      const r = batch.results[k];
+      return `<article class="batch-card${r.error ? ' has-error' : ''}" data-seat="${k}">
+        <div class="batch-card-head">
+          <span class="seat-pill">${k} 號</span>
+          ${r.error ? `<span class="err-text">⚠️ ${escapeHtml(r.error)}</span>` : ''}
+          <div class="head-actions">
+            <button type="button" class="btn small" data-bact="copy">複製</button>
+            <button type="button" class="btn small" data-bact="save">存入紀錄本</button>
+            <button type="button" class="btn small ghost" data-bact="redo" title="清掉這位的結果，下次批次產生時重寫">重寫</button>
+          </div>
+        </div>
+        <label class="mini-label">輔導內容重點</label>
+        <textarea rows="2" data-field="keyPoints">${escapeHtml(r.keyPoints)}</textarea>
+        <label class="mini-label">聯繫內容</label>
+        <textarea rows="5" data-field="contact">${escapeHtml(r.contact)}</textarea>
+      </article>`;
+    }).join('');
+  }
+
+  function seatRecord(k) {
+    const c = seatCase(k);
+    const r = batch.results[k];
+    return {
+      id: uid(),
+      savedAt: new Date().toISOString(),
+      form: {
+        studentName: `${k} 號`, otherNames: '', grade: c.grade, date: c.date, target: c.target, method: c.method,
+        location: '', categories: c.categories, details: c.details, actions: c.actions,
+        event: c.event, handling: '', response: '', length: c.length, tone: c.tone, restoreNames: false,
+      },
+      keyPoints: r.keyPoints,
+      contact: r.contact,
+    };
+  }
+
+  function onBatchResultClick(e) {
+    const btn = e.target.closest('[data-bact]');
+    if (!btn) return;
+    const k = btn.closest('.batch-card').dataset.seat;
+    const r = batch.results[k];
+    if (btn.dataset.bact === 'copy') {
+      copyText(`輔導內容重點：${r.keyPoints}\n\n聯繫內容：${r.contact}`).then((ok) => toast(ok ? `已複製 ${k} 號 ✓` : '複製失敗', ok ? '' : 'error'));
+    } else if (btn.dataset.bact === 'save') {
+      if (!r.keyPoints && !r.contact) { toast('這位的結果是空的', 'error'); return; }
+      if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
+      const list = loadHistory();
+      list.unshift(seatRecord(k));
+      saveHistory(list);
+      renderHistoryCount();
+      toast(`已把 ${k} 號存入紀錄本 💾`);
+    } else if (btn.dataset.bact === 'redo') {
+      delete batch.results[k];
+      if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
+      batch.active = k;
+      renderBatchResults();
+      renderSeatGrid();
+      renderSeatEditor();
+      saveBatchSoon();
+      toast(`${k} 號可以調整狀況後，再按「開始批次產生」重寫`);
+    }
+  }
+
+  function batchSaveAll() {
+    const keys = seatKeys(batch.results).filter((k) => batch.results[k].keyPoints || batch.results[k].contact);
+    if (!keys.length) { toast('還沒有可以儲存的結果', 'error'); return; }
+    const list = loadHistory();
+    keys.forEach((k) => {
+      if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
+      list.unshift(seatRecord(k));
+    });
+    saveHistory(list);
+    renderHistoryCount();
+    toast(`已把 ${keys.length} 位存入紀錄本 💾`);
+  }
+
+  function batchReset() {
+    if (!Object.keys(batch.seats).length && !Object.keys(batch.results).length) return;
+    if (!confirm('確定清空這批的座號、狀況與結果？（紀錄本不受影響，建議先「全部存入紀錄本」）')) return;
+    const { common } = batch;
+    batch = newBatch();
+    batch.common = common;
+    store.set('localStorage', KEYS.batch, JSON.stringify(batch));
+    renderSeatGrid();
+    renderSeatEditor();
+    renderBatchResults();
+    setBatchProgress(0, 0, '尚未開始');
+  }
+
+  async function batchCopyPrompt() {
+    readBatchCommon();
+    const selected = seatKeys(batch.seats).filter(seatHasInput);
+    if (!selected.length) { toast('先點選座號並勾選狀況', 'error'); return; }
+    const c0 = seatCase(selected[0]);
+    const system = systemRules({ ...c0, target: batch.common.target });
+    system.push(
+      '- 每位學生的輔導對象以各自資料中的「輔導對象」為準。',
+      '',
+      '### 輸出格式',
+      `本次共有 ${selected.length} 位學生，請依座號分別輸出，每位格式如下，不要有其他說明：`,
+      '【3號】',
+      '輔導內容重點：（一段文字）',
+      '聯繫內容：（一段文字）',
+    );
+    const blocks = selected.map((k) => [`### 【${k}號】的輔導資料`, ...caseLines(seatCase(k), (s) => deidentify(s, []))].join('\n'));
+    const ok = await copyText(`${system.join('\n')}\n\n${blocks.join('\n\n')}`);
+    if (!ok) { toast('複製失敗，請再試一次', 'error'); return; }
+    $('#batchPasteBack').open = true;
+    toast('已複製批次提示詞！貼到 Gemini，再把回覆貼回下方「依座號拆開」。', '', 5000);
+    window.open('https://gemini.google.com/app', '_blank', 'noopener');
+  }
+
+  function batchParse() {
+    const text = $('#batchPasteText').value.trim();
+    if (!text) { toast('請先貼上 Gemini 的回覆', 'error'); return; }
+    const parts = text.replace(/\*\*/g, '').split(/【\s*(\d{1,2})\s*號\s*】/);
+    let n = 0;
+    for (let i = 1; i < parts.length; i += 2) {
+      const k = String(Number(parts[i]));
+      const r = parsePlain(parts[i + 1]);
+      if (!r.key_points && !r.contact) continue;
+      batch.results[k] = { keyPoints: postProcess(r.key_points, [], false), contact: postProcess(r.contact, [], false) };
+      if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
+      n += 1;
+    }
+    if (!n) { toast('找不到「【3號】」這樣的座號標題，請確認貼上的內容', 'error', 5000); return; }
+    $('#batchPasteText').value = '';
+    renderBatchResults();
+    renderSeatGrid();
+    saveBatchSoon();
+    toast(`已拆出 ${n} 位學生的紀錄 ✓`);
+  }
+
   // ---------- 紀錄本 ----------
   function saveRecord() {
     const keyPoints = $('#keyPoints').value.trim();
     const contact = $('#contact').value.trim();
     if (!keyPoints && !contact) { toast('結果是空的，先產生紀錄吧', 'error'); return; }
-    const form = readForm();
     const list = loadHistory();
-    list.unshift({
-      id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      savedAt: new Date().toISOString(),
-      form,
-      keyPoints,
-      contact,
-    });
+    list.unshift({ id: uid(), savedAt: new Date().toISOString(), form: readForm(), keyPoints, contact });
     saveHistory(list);
     renderHistoryCount();
     toast('已存入紀錄本 💾');
@@ -524,7 +1029,7 @@
     const list = loadHistory().filter((r) => {
       if (!q) return true;
       const f = r.form || {};
-      return [f.studentName, f.date, f.grade, (f.categories || []).join(' '), r.keyPoints, r.contact].join(' ').includes(q);
+      return [f.studentName, f.date, f.grade, (f.categories || []).join(' '), (f.details || []).join(' '), r.keyPoints, r.contact].join(' ').includes(q);
     });
     const ul = $('#historyList');
     if (!list.length) {
@@ -560,6 +1065,7 @@
     const rec = list.find((r) => r.id === id);
     if (!rec) return;
     if (btn.dataset.act === 'load') {
+      switchView('single');
       fillForm(rec.form);
       $('#keyPoints').value = rec.keyPoints;
       $('#contact').value = rec.contact;
@@ -581,10 +1087,10 @@
     const list = loadHistory();
     if (!list.length) { toast('紀錄本是空的', 'error'); return; }
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [['日期', '年級', '學生', '輔導對象', '輔導方式', '輔導類別', '輔導內容重點', '聯繫內容']];
+    const rows = [['日期', '年級', '學生', '輔導對象', '輔導方式', '晤談地點', '輔導類別', '狀況細節', '輔導內容重點', '聯繫內容']];
     list.forEach((r) => {
       const f = r.form || {};
-      rows.push([f.date, f.grade, f.studentName, TARGET_LABEL[f.target] || '', f.method, (f.categories || []).join('、'), r.keyPoints, r.contact]);
+      rows.push([f.date, f.grade, f.studentName, TARGET_LABEL[f.target] || '', f.method, f.location || '', (f.categories || []).join('、'), (f.details || []).join('、'), r.keyPoints, r.contact]);
     });
     const csv = `﻿${rows.map((row) => row.map(cell).join(',')).join('\r\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -607,8 +1113,8 @@
       <h1>學生輔導紀錄</h1>
       <table>
         <tr><th>學生</th><td>${escapeHtml(f.studentName || '')}</td><th>年級</th><td>${escapeHtml(f.grade || '')}</td></tr>
-        <tr><th>日期</th><td>${escapeHtml(rocDate(f.date))}</td><th>輔導方式</th><td>${escapeHtml(f.method)}</td></tr>
-        <tr><th>輔導對象</th><td>${escapeHtml(TARGET_LABEL[f.target])}</td><th>輔導類別</th><td>${escapeHtml(f.categories.join('、'))}</td></tr>
+        <tr><th>日期</th><td>${escapeHtml(rocDate(f.date))}</td><th>輔導方式</th><td>${escapeHtml(f.method)}${f.location ? `（${escapeHtml(f.location)}）` : ''}</td></tr>
+        <tr><th>輔導對象</th><td>${escapeHtml(TARGET_LABEL[effectiveTarget(f.target, f.actions)])}</td><th>輔導類別</th><td>${escapeHtml(f.categories.join('、'))}</td></tr>
       </table>
       <section><h2>輔導內容重點</h2><p>${escapeHtml(keyPoints)}</p></section>
       <section><h2>聯繫內容</h2><p>${escapeHtml(contact)}</p></section>`;
@@ -742,15 +1248,28 @@
     });
   }
 
+  // ---------- 模式切換 ----------
+  function switchView(view) {
+    const isBatch = view === 'batch';
+    $('#viewSingle').hidden = isBatch;
+    $('#viewBatch').hidden = !isBatch;
+    $('#tabSingle').setAttribute('aria-selected', String(!isBatch));
+    $('#tabBatch').setAttribute('aria-selected', String(isBatch));
+    store.set('localStorage', KEYS.view, view);
+  }
+
   // ---------- 綁定 ----------
   function applyTemplate(i) {
     const t = TEMPLATES[i];
-    const hasText = ['#event', '#handling', '#response'].some((s) => $(s).value.trim());
+    const hasText = ['#event', '#handling', '#response'].some((s) => $(s).value.trim()) || selectedDetails().length;
     if (hasText && !confirm(`要用「${t.label}」範例取代目前填寫的內容嗎？`)) return;
     $('#event').value = t.event;
     $('#handling').value = t.handling;
     $('#response').value = t.response;
     $$('#categories input').forEach((c) => { c.checked = t.cats.includes(c.value); });
+    setChips('#singleTagLib', 'tag', t.details);
+    setChips('#singleActions', 'action', t.actions);
+    refreshSingleTagState();
     saveDraftSoon();
     updatePeek();
   }
@@ -760,6 +1279,8 @@
     fillForm({ date: todayStr() });
     $('#keyPoints').value = '';
     $('#contact').value = '';
+    undoStack = null;
+    $('#btnUndo').disabled = true;
     updateCounts();
     setStatus('');
     saveDraft();
@@ -767,11 +1288,36 @@
   }
 
   function bind() {
-    document.querySelector('main').addEventListener('input', () => { saveDraftSoon(); });
-    document.querySelector('main').addEventListener('change', () => { saveDraftSoon(); });
+    const single = $('#viewSingle');
+    single.addEventListener('input', () => { saveDraftSoon(); if ($('.peek').open) updatePeek(); });
+    single.addEventListener('change', () => { saveDraftSoon(); if ($('.peek').open) updatePeek(); });
     ['#keyPoints', '#contact'].forEach((s) => $(s).addEventListener('input', updateCounts));
     $('.peek').addEventListener('toggle', updatePeek);
-    $('main').addEventListener('input', () => { if ($('.peek').open) updatePeek(); });
+
+    // 個別輔導：標籤
+    $('#singleTagLib').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip-btn');
+      if (!b) return;
+      if (toggleChip(b)) {
+        const cat = DETAIL_TO_CAT[b.dataset.tag];
+        const box = $(`#categories input[value="${cat}"]`);
+        if (box) box.checked = true;
+      }
+      refreshSingleTagState();
+      saveDraftSoon();
+      if ($('.peek').open) updatePeek();
+    });
+    $('#singleActions').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip-btn');
+      if (!b) return;
+      const on = toggleChip(b);
+      if (on && b.dataset.action === '聯絡家長' && $('input[name=target]:checked').value === 'student') {
+        $('input[name=target][value=both]').checked = true;
+        toast('已勾「聯絡家長」，輔導對象自動改成「學生＋家長」');
+      }
+      saveDraftSoon();
+      if ($('.peek').open) updatePeek();
+    });
 
     $('#templates').addEventListener('click', (e) => {
       const b = e.target.closest('.tpl');
@@ -780,6 +1326,8 @@
 
     $('#btnGenerate').addEventListener('click', generate);
     $('#btnRegenerate').addEventListener('click', generate);
+    $$('[data-rewrite]').forEach((b) => b.addEventListener('click', () => rewrite(b.dataset.rewrite)));
+    $('#btnUndo').addEventListener('click', undo);
     $('#btnCopyPrompt').addEventListener('click', copyPrompt);
     $('#btnParse').addEventListener('click', parsePasted);
     $('#btnClear').addEventListener('click', clearAll);
@@ -796,6 +1344,48 @@
       const ct = $('#contact').value.trim();
       if (!kp && !ct) { toast('內容是空的', 'error'); return; }
       toast((await copyText(`輔導內容重點：${kp}\n\n聯繫內容：${ct}`)) ? '已複製全部 ✓' : '複製失敗');
+    });
+
+    // 模式切換
+    $$('.mode-tab').forEach((t) => t.addEventListener('click', () => switchView(t.dataset.view)));
+
+    // 批次補登
+    $('#seatGrid').addEventListener('click', onSeatClick);
+    $('#btnRemoveSeat').addEventListener('click', removeActiveSeat);
+    $('#batchTagLib').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip-btn');
+      const s = batch.seats[batch.active];
+      if (!b || !s) return;
+      const on = toggleChip(b);
+      s.details = on ? [...s.details, b.dataset.tag] : s.details.filter((d) => d !== b.dataset.tag);
+      renderReportNotice($('#bReportNotice'), s.details);
+      saveBatchSoon();
+    });
+    $('#batchActions').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip-btn');
+      const s = batch.seats[batch.active];
+      if (!b || !s) return;
+      const on = toggleChip(b);
+      s.actions = on ? [...s.actions, b.dataset.action] : s.actions.filter((a) => a !== b.dataset.action);
+      saveBatchSoon();
+    });
+    $('#bNote').addEventListener('input', () => {
+      const s = batch.seats[batch.active];
+      if (s) { s.note = $('#bNote').value; saveBatchSoon(); }
+    });
+    ['#bDate', '#bGrade', '#bTarget', '#bMethod'].forEach((s) => $(s).addEventListener('change', readBatchCommon));
+    $$('input[name=bLength], input[name=bTone]').forEach((r) => r.addEventListener('change', readBatchCommon));
+    $('#btnBatchGenerate').addEventListener('click', batchGenerate);
+    $('#btnBatchCopyPrompt').addEventListener('click', batchCopyPrompt);
+    $('#btnBatchParse').addEventListener('click', batchParse);
+    $('#btnBatchSaveAll').addEventListener('click', batchSaveAll);
+    $('#btnBatchReset').addEventListener('click', batchReset);
+    $('#batchResultList').addEventListener('click', onBatchResultClick);
+    $('#batchResultList').addEventListener('input', (e) => {
+      const ta = e.target.closest('textarea[data-field]');
+      if (!ta) return;
+      const k = ta.closest('.batch-card').dataset.seat;
+      if (batch.results[k]) { batch.results[k][ta.dataset.field] = ta.value; saveBatchSoon(); }
     });
 
     // 設定
@@ -856,6 +1446,11 @@
   updateCounts();
   renderKeyDot();
   renderHistoryCount();
+  fillBatchCommon();
+  renderSeatGrid();
+  renderSeatEditor();
+  renderBatchResults();
   setupSpeech();
   bind();
+  switchView(store.get('localStorage', KEYS.view) === 'batch' ? 'batch' : 'single');
 })();
