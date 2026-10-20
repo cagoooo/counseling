@@ -366,6 +366,7 @@
   function updateCounts() {
     setCount($('#kpCount'), $('#keyPoints').value, 'keyPoints');
     setCount($('#ctCount'), $('#contact').value, 'contact');
+    renderQc();
   }
 
   // ---------- 班級名冊（只存在本機，不會送給 AI） ----------
@@ -446,6 +447,73 @@
       });
     }
     return t;
+  }
+
+  // ---------- 登錄前自動品質檢查 ----------
+  // 診斷或標籤化字眼：不論老師有沒有寫，都建議改成具體行為描述
+  const QC_LABEL_WORDS = ['過動', 'ADHD', '注意力缺失', '自閉', '亞斯', '憂鬱症', '躁鬱', '焦慮症', '智障', '問題學生', '壞孩子', '頑劣', '惡劣', '懶惰', '叛逆', '白目', '不受教', '屢勸不聽', '有病'];
+  // 常被 AI 自行補上的細節：老師的輸入裡沒有、輸出卻出現時提醒
+  const QC_DETAIL_WORDS = ['電話', '聯絡簿', 'LINE', '簡訊', '家長表示', '家長同意', '家長回應', '家長承諾', '家長配合', '家長理解', '表示理解', '願意配合', '簽名', '記過', '警告', '愛校服務', '轉介'];
+  // 內部用語或代號殘留
+  const QC_NOTE_WORDS = ['未說明', '未填寫', '未提供', '資料中', '甲生', '[電話已遮蔽]', '[身分證字號已遮蔽]', '老師點選'];
+
+  function qcIssues(fields, source) {
+    const issues = [];
+    fields.forEach(({ key, label, text }) => {
+      if (!text) return;
+      QC_LABEL_WORDS.forEach((w) => {
+        if (text.includes(w)) issues.push({ key, word: w, kind: 'label', msg: `「${w}」屬於診斷或標籤化字眼，建議改成具體的行為描述` });
+      });
+      QC_DETAIL_WORDS.forEach((w) => {
+        if (text.includes(w) && !source.includes(w)) issues.push({ key, word: w, kind: 'detail', msg: `「${w}」沒有出現在你的輸入裡，可能是 AI 自行補上的細節，請確認是否屬實` });
+      });
+      QC_NOTE_WORDS.forEach((w) => {
+        if (text.includes(w)) issues.push({ key, word: w, kind: 'note', msg: `「${w}」是內部用語或代號，不應出現在正式紀錄` });
+      });
+      const c = countText(text, key);
+      if (c.over) issues.push({ key, word: '', kind: 'length', msg: `「${label}」${c.label}，超過學校系統的字數上限` });
+    });
+    return issues;
+  }
+
+  function singleSource(form) {
+    const prior = form.followupId ? loadHistory().find((r) => r.id === form.followupId) : null;
+    return [form.event, form.handling, form.response, form.otherNames, form.method, form.location,
+      form.details.join(' '), form.actions.join(' '), form.categories.join(' '),
+      prior ? `${prior.keyPoints} ${prior.contact}` : ''].join(' ');
+  }
+
+  function renderQc() {
+    const kp = $('#keyPoints').value.trim();
+    const ct = $('#contact').value.trim();
+    const panel = $('#qcPanel');
+    if (!kp && !ct) { panel.hidden = true; return; }
+    const issues = qcIssues([
+      { key: 'keyPoints', label: fmt.kpLabel, text: kp },
+      { key: 'contact', label: fmt.ctLabel, text: ct },
+    ], singleSource(readForm()));
+    panel.hidden = false;
+    panel.className = `qc-panel${issues.length ? ' has-issues' : ''}`;
+    $('#qcTitle').textContent = issues.length ? `🔍 登錄前自動檢查：有 ${issues.length} 處建議確認` : '🔍 登錄前自動檢查：沒有發現常見問題 ✓';
+    $('#qcList').innerHTML = issues.map((it, i) => `<li class="qc-${it.kind}">
+        <span>${escapeHtml(it.msg)}<small>（${escapeHtml(it.key === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel)}）</small></span>
+        ${it.word ? `<button type="button" class="btn small" data-qc="${i}">選取這段</button>` : ''}
+      </li>`).join('');
+    panel._issues = issues;
+  }
+
+  function batchQcHtml(k) {
+    const r = batch.results[k];
+    if (!r || r.error || (!r.keyPoints && !r.contact)) return '';
+    const s0 = batch.seats[k] ? seatCase(k) : null;
+    const source = s0 ? [s0.event, s0.method, s0.details.join(' '), s0.actions.join(' '), s0.categories.join(' ')].join(' ') : '';
+    const issues = qcIssues([
+      { key: 'keyPoints', label: fmt.kpLabel, text: r.keyPoints },
+      { key: 'contact', label: fmt.ctLabel, text: r.contact },
+    ], source);
+    return issues.length
+      ? `<div class="qc-mini has-issues">⚠️ 建議確認：${issues.map((it) => escapeHtml(it.msg)).join('；')}</div>`
+      : '<div class="qc-mini">🔍 自動檢查：沒有發現常見問題 ✓</div>';
   }
 
   // ---------- 提示詞 ----------
@@ -1031,6 +1099,7 @@
           ${ok ? '<button type="button" class="btn small" data-bact="copyCt">複製</button>' : ''}
         </div>
         <textarea rows="5" data-field="contact">${escapeHtml(r.contact)}</textarea>
+        <div class="qc-slot">${batchQcHtml(k)}</div>
         <div class="batch-card-actions">
           ${ok ? `<button type="button" class="btn small ${r.entered ? 'ghost' : 'primary'}" data-bact="entered">${r.entered ? '↩ 取消已登錄' : '✓ 標記已登錄'}</button>` : ''}
           ${ok ? '<button type="button" class="btn small" data-bact="save">存入紀錄本</button>' : ''}
@@ -1745,6 +1814,16 @@
     $('#btnRegenerate').addEventListener('click', generate);
     $$('[data-rewrite]').forEach((b) => b.addEventListener('click', () => rewrite(b.dataset.rewrite)));
     $('#btnUndo').addEventListener('click', undo);
+    $('#qcList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-qc]');
+      const it = b && ($('#qcPanel')._issues || [])[Number(b.dataset.qc)];
+      if (!it) return;
+      const ta = $(`#${it.key}`);
+      const i = ta.value.indexOf(it.word);
+      if (i < 0) return;
+      ta.focus();
+      ta.setSelectionRange(i, i + it.word.length);
+    });
     $('#btnCopyPrompt').addEventListener('click', copyPrompt);
     $('#btnParse').addEventListener('click', parsePasted);
     $('#btnClear').addEventListener('click', clearAll);
@@ -1803,6 +1882,8 @@
       if (!ta) return;
       const k = ta.closest('.batch-card').dataset.seat;
       if (batch.results[k]) { batch.results[k][ta.dataset.field] = ta.value; saveBatchSoon(); }
+      const slot = ta.closest('.batch-card').querySelector('.qc-slot');
+      if (slot) slot.innerHTML = batchQcHtml(k);
       const cnt = ta.closest('.batch-card').querySelector(`[data-count="${ta.dataset.field}"]`);
       if (cnt) {
         const c = countText(ta.value, ta.dataset.field);

@@ -358,11 +358,14 @@ input:focus, select:focus, textarea:focus {
 }
 @media (max-width: 640px) {
   .brand p { display: none; }
-  .brand h1 { font-size: 1.22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brand { flex: 1 1 auto; }
+  .brand > div { min-width: 0; }
+  .brand h1 { font-size: 1.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topbar { gap: 8px; }
   .brand { gap: 10px; }
   .top-actions { gap: 6px; }
-  .top-actions .btn { padding: 8px 10px; }
+  .top-actions .btn { padding: 8px 8px; gap: 4px; }
+  .top-actions .badge { padding: 0 5px; }
   .brand img { width: 34px; height: 34px; }
   .top-actions .label { display: none; }
   .grid-3 { grid-template-columns: 1fr 1fr; }
@@ -551,3 +554,24 @@ input[type="number"]:focus { outline: none; border-color: var(--primary); box-sh
 }
 .date-range input { flex: 1; width: 100%; }
 .history-summary-row .link-btn { flex: none; white-space: nowrap; }
+
+/* ===== 登錄前自動品質檢查 ===== */
+.qc-panel { margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; background: #eaf6ef; border: 1px solid #b9e0c8; }
+.qc-panel.has-issues { background: #fff8e6; border-color: #f0cf8a; }
+.qc-title { margin: 0; font-weight: 700; color: #1f6b43; }
+.qc-panel.has-issues .qc-title { color: #7a4a14; }
+.qc-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.qc-list:empty { display: none; }
+.qc-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--fs-sm); padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .7); }
+.qc-list li small { color: var(--muted); margin-left: 4px; }
+.qc-list li .btn { flex: none; }
+.qc-label { border-left: 4px solid var(--danger); }
+.qc-detail { border-left: 4px solid var(--accent); }
+.qc-note, .qc-length { border-left: 4px solid #8a6d3b; }
+.qc-mini { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: var(--fs-sm); background: #eaf6ef; color: #1f6b43; }
+.qc-mini.has-issues { background: #fff8e6; color: #7a4a14; }
+@media (max-width: 640px) {
+  .qc-list li { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 360px) { .brand img { display: none; } }

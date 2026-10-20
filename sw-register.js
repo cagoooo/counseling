@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.20-12';
+  var APP_VERSION = '2026.10.20-14';
   var BAR_ID = 'sw-update-bar';
   var params = new URLSearchParams(location.search);
 
@@ -105,19 +105,36 @@
 
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
     SW_REG = reg;
-    if (reg.waiting && navigator.serviceWorker.controller) showBar();
+    if (reg.waiting && navigator.serviceWorker.controller) onUpdateReady();
     reg.addEventListener('updatefound', function () {
       var nw = reg.installing;
       if (!nw) return;
       nw.addEventListener('statechange', function () {
         // 有 controller 才是「更新」；沒有代表第一次安裝，不必提示
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) showBar();
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) onUpdateReady();
       });
     });
     setInterval(function () { reg.update().catch(function () {}); }, 60000);
   }).catch(function () {});
 
+  // 新版裝好了：若這個頁面本身已是最新版（老師剛好在部署後才打開），就安靜換上、不跳通知
+  var SILENT = false;
+  function onUpdateReady() {
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.version === APP_VERSION && SW_REG && SW_REG.waiting) {
+          SILENT = true;
+          SW_REG.waiting.postMessage({ type: 'SKIP_WAITING' });
+        } else {
+          showBar();
+        }
+      })
+      .catch(showBar);
+  }
+
   navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (SILENT) { SILENT = false; return; } // 頁面已是新版，不必重整
     try {
       if (sessionStorage.getItem('crh.swReloaded')) return; // 防止無限重整
       sessionStorage.setItem('crh.swReloaded', '1');
