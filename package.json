@@ -1,0 +1,13 @@
+{
+  "name": "counseling",
+  "private": true,
+  "description": "輔導紀錄小幫手（純靜態網站；此檔只用於本機產圖與升版工具）",
+  "type": "module",
+  "scripts": {
+    "gen:images": "node scripts/generate-images.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.80",
+    "png-to-ico": "^2.1.8"
+  }
+}

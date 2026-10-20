@@ -38,6 +38,25 @@
 純靜態網頁（HTML + CSS + JavaScript，無打包工具），部署在 GitHub Pages。
 Gemini 模型會依金鑰即時查詢可用清單（ListModels）自動挑選，模型停用時不用改程式。
 
+- **PWA**：可「加到主畫面」，離線時也能開啟介面（AI 產生仍需網路）。
+- **新版本通知**：Service Worker 偵測到新版時，畫面會跳出「重新整理載入」通知列；另有 `version.json` 輪詢當備援。網址加 `?swdemo=1` 可預覽通知列樣式。
+- **社群分享卡片**：`og-image.png`（1200×630），`og:image` 網址帶版本號，避免 LINE／Facebook 卡在舊圖。
+
+## 改版發布流程
+
+每次修改後，**先升版再提交**，否則已開著網頁的人收不到更新通知：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Notes "這次改了什麼"
+git add -A; git commit -m "feat: ..."; git push
+```
+
+升版腳本會同步 `version.json`、`sw.js`、`sw-register.js` 與 `index.html` 裡所有 `?v=` 版本號。
+
+要重新產生圖示或分享圖：`npm install` 後執行 `npm run gen:images`（使用 Windows 微軟正黑體）。
+
+本機預覽預設不啟用 Service Worker（避免快取干擾修改），網址加 `?sw=1` 才會啟用測試，`?sw=0` 關閉。
+
 ---
 
 Made with ❤️ by [阿凱老師](https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5)

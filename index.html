@@ -6,11 +6,35 @@
   <title>輔導紀錄小幫手</title>
   <meta name="description" content="把老師的口語描述整理成正式輔導紀錄（輔導內容重點＋聯繫內容），學生姓名自動去識別化，支援座號批次補登，資料只存在你的瀏覽器。">
   <meta name="theme-color" content="#2f6f62">
+  <link rel="canonical" href="https://cagoooo.github.io/counseling/">
+
+  <!-- 社群分享卡片（Facebook／LINE） -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="輔導紀錄小幫手">
-  <meta property="og:description" content="口語描述或點選標籤 → 正式輔導紀錄，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <meta property="og:site_name" content="輔導紀錄小幫手">
+  <meta property="og:locale" content="zh_TW">
+  <meta property="og:url" content="https://cagoooo.github.io/counseling/">
+  <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
+  <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-1">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-1">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="輔導紀錄小幫手：口語描述或點選標籤，整理成正式輔導紀錄">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
+  <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-1">
+
+  <!-- 網站圖示與 PWA -->
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="輔導紀錄">
+
+  <link rel="stylesheet" href="style.css?v=2026.10.20-1">
+  <script src="sw-register.js?v=2026.10.20-1" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -336,6 +360,7 @@
       <a href="https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5"
          target="_blank" rel="noopener noreferrer" class="site-credit__author">阿凱老師</a>
     </p>
+    <p class="version-tag" id="appVersion"></p>
   </footer>
 
   <!-- AI 設定 -->
@@ -399,6 +424,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=1.1.0"></script>
+  <script src="app.js?v=2026.10.20-1"></script>
 </body>
 </html>

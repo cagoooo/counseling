@@ -386,3 +386,6 @@ input:focus, select:focus, textarea:focus {
   #printArea h2 { font-size: 13pt; margin: 0 0 4pt; }
   #printArea p { margin: 0; line-height: 1.8; text-align: justify; }
 }
+
+.version-tag { font-size: .78rem; opacity: .7; letter-spacing: .03em; }
+.version-tag:empty { display: none; }
