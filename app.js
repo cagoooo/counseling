@@ -9,6 +9,8 @@
     draft: 'crh.draft',
     batch: 'crh.batch',
     view: 'crh.view',
+    roster: 'crh.roster',
+    lastBackup: 'crh.lastBackup',
   };
 
   const CATEGORIES = ['人際關係', '情緒困擾', '學習適應', '生活常規', '行為偏差', '家庭關係', '身心健康', '校園安全', '生涯興趣', '其他'];
@@ -307,13 +309,59 @@
     $('#ctCount').textContent = `${countChars($('#contact').value)} 字`;
   }
 
+  // ---------- 班級名冊（只存在本機，不會送給 AI） ----------
+  function loadRoster() {
+    try { return JSON.parse(store.get('localStorage', KEYS.roster) || '{}') || {}; } catch { return {}; }
+  }
+  let roster = loadRoster();
+  function saveRoster(map) {
+    roster = map;
+    store.set('localStorage', KEYS.roster, JSON.stringify(map));
+  }
+  const rosterName = (k) => roster[String(k)] || '';
+  const seatLabel = (k) => (rosterName(k) ? `${k} 號 ${rosterName(k)}` : `${k} 號`);
+  const NAME_RE = /^[一-鿿A-Za-z·．.]{2,12}$/;
+
+  // 支援「1 王小明」「01.王小明」「1號,王小明」、從 Excel 貼上的「1⇥王小明⇥男」，或只有一欄姓名（依順序編座號）
+  function parseRoster(text) {
+    const map = {};
+    const bad = [];
+    let seq = 0;
+    text.split(/\r?\n/).forEach((line) => {
+      const tokens = line.trim().split(/[\t,，、;；]+|\s+/).filter(Boolean);
+      if (!tokens.length) return;
+      seq += 1;
+      let seat = seq;
+      let name = tokens[0];
+      const num = tokens[0].match(/^(\d{1,2})[號.．:：]?$/);
+      if (num) {
+        seat = Number(num[1]);
+        name = tokens[1] || '';
+        seq = seat;
+      }
+      if (seat >= 1 && seat <= SEAT_MAX && NAME_RE.test(name)) map[String(seat)] = name;
+      else bad.push(line.trim());
+    });
+    return { map, bad };
+  }
+  const rosterToText = (map) => Object.keys(map).map(Number).sort((a, b) => a - b).map((k) => `${k} ${map[k]}`).join('\n');
+
   // ---------- 去識別化 ----------
   const splitNames = (s) => (s || '').split(/[,，、;；\s]+/).map((x) => x.trim()).filter((x) => x.length >= 2);
 
   function buildAliases(form) {
     const list = [];
-    splitNames(form.studentName).forEach((n) => list.push({ real: n, code: '甲生' }));
-    splitNames(form.otherNames).forEach((n, i) => list.push({ real: n, code: OTHER_CODES[i] || `同學${i + 1}` }));
+    const mains = splitNames(form.studentName);
+    mains.forEach((n) => list.push({ real: n, code: '甲生' }));
+    const others = splitNames(form.otherNames).filter((n) => !mains.includes(n));
+    // 名冊上的同學若出現在敘述裡，也自動換代號（老師忘了填「其他相關人物」也不會外洩）
+    const text = [form.event, form.handling, form.response].join('\n');
+    Object.values(roster).forEach((n) => {
+      if (mains.includes(n) || others.includes(n)) return;
+      const given = /^[一-鿿]{3}$/.test(n) ? n.slice(1) : '';
+      if (text.includes(n) || (given && text.includes(given))) others.push(n);
+    });
+    others.forEach((n, i) => list.push({ real: n, code: OTHER_CODES[i] || `同學${i + 1}` }));
     // 三個字的中文姓名，也把「名」（如小明）換掉
     const extra = [];
     list.forEach(({ real, code }) => {
@@ -713,8 +761,10 @@
       const cls = ['seat'];
       if (batch.seats[k]) cls.push('selected');
       if (batch.results[k]?.keyPoints || batch.results[k]?.contact) cls.push('done');
+      if (batch.results[k]?.entered) cls.push('entered');
       if (batch.active === k) cls.push('active');
-      html.push(`<button type="button" class="${cls.join(' ')}" data-seat="${k}" aria-pressed="${!!batch.seats[k]}" aria-label="${k} 號">${k}</button>`);
+      const label = escapeHtml(seatLabel(k));
+      html.push(`<button type="button" class="${cls.join(' ')}" data-seat="${k}" aria-pressed="${!!batch.seats[k]}" aria-label="${label}" title="${label}">${k}</button>`);
     }
     $('#seatGrid').innerHTML = html.join('');
     $('#seatCount').textContent = `已選 ${Object.keys(batch.seats).length} / ${BATCH_LIMIT} 人`;
@@ -726,7 +776,7 @@
     $('#seatEditorEmpty').hidden = !!s;
     $('#seatEditorBody').hidden = !s;
     $('#btnRemoveSeat').hidden = !s;
-    $('#seatEditorName').textContent = s ? `${k} 號的狀況` : '勾選狀況';
+    $('#seatEditorName').textContent = s ? `${seatLabel(k)}的狀況` : '勾選狀況';
     if (!s) return;
     $('#batchTagLib').innerHTML = tagLibHtml(s.details);
     $('#batchActions').innerHTML = actionsHtml(s.actions);
@@ -797,6 +847,8 @@
       length: c.length, tone: c.tone,
     };
   }
+  const seatAliases = (k) => buildAliases({ studentName: rosterName(k), otherNames: '', event: batch.seats[k]?.note || '', handling: '', response: '' });
+
   const seatHasInput = (k) => {
     const s = batch.seats[k];
     return s && (s.details.length || s.actions.length || (s.note || '').trim());
@@ -835,12 +887,13 @@
         setBatchProgress(done, todo.length, `正在產生 ${k} 號（${done + 1} / ${todo.length}）…`);
         const c = seatCase(k);
         const system = [...systemRules(c), '', '### 輸出格式', '以 JSON 輸出，欄位 key_points 為「輔導內容重點」，contact 為「聯繫內容」。'].join('\n');
-        const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, []))].join('\n');
+        const aliases = seatAliases(k);
+        const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, aliases))].join('\n');
         try {
           const r = await callGemini(system, user, {
             onRetry: (n) => setBatchProgress(done, todo.length, `${k} 號：伺服器忙碌，第 ${n} 次重試…`),
           });
-          batch.results[k] = { keyPoints: postProcess(r.key_points, [], false), contact: postProcess(r.contact, [], false) };
+          batch.results[k] = { keyPoints: postProcess(r.key_points, aliases, false), contact: postProcess(r.contact, aliases, false) };
         } catch (e) {
           failed += 1;
           batch.results[k] = { keyPoints: '', contact: '', error: friendlyError(e) };
@@ -878,22 +931,53 @@
     }
     box.innerHTML = keys.map((k) => {
       const r = batch.results[k];
-      return `<article class="batch-card${r.error ? ' has-error' : ''}" data-seat="${k}">
+      const ok = !r.error && (r.keyPoints || r.contact);
+      const name = rosterName(k);
+      return `<article class="batch-card${r.error ? ' has-error' : ''}${r.entered ? ' entered' : ''}" data-seat="${k}">
         <div class="batch-card-head">
           <span class="seat-pill">${k} 號</span>
+          ${name ? `<span class="seat-name">${escapeHtml(name)}</span>` : ''}
+          ${r.entered ? '<span class="entered-pill">✓ 已登錄</span>' : ''}
           ${r.error ? `<span class="err-text">⚠️ ${escapeHtml(r.error)}</span>` : ''}
-          <div class="head-actions">
-            <button type="button" class="btn small" data-bact="copy">複製</button>
-            <button type="button" class="btn small" data-bact="save">存入紀錄本</button>
-            <button type="button" class="btn small ghost" data-bact="redo" title="清掉這位的結果，下次批次產生時重寫">重寫</button>
-          </div>
         </div>
-        <label class="mini-label">輔導內容重點</label>
+        <div class="field-copy">
+          <label class="mini-label">輔導內容重點</label>
+          ${ok ? '<button type="button" class="btn small" data-bact="copyKp">複製</button>' : ''}
+        </div>
         <textarea rows="2" data-field="keyPoints">${escapeHtml(r.keyPoints)}</textarea>
-        <label class="mini-label">聯繫內容</label>
+        <div class="field-copy">
+          <label class="mini-label">聯繫內容</label>
+          ${ok ? '<button type="button" class="btn small" data-bact="copyCt">複製</button>' : ''}
+        </div>
         <textarea rows="5" data-field="contact">${escapeHtml(r.contact)}</textarea>
+        <div class="batch-card-actions">
+          ${ok ? `<button type="button" class="btn small ${r.entered ? 'ghost' : 'primary'}" data-bact="entered">${r.entered ? '↩ 取消已登錄' : '✓ 標記已登錄'}</button>` : ''}
+          ${ok ? '<button type="button" class="btn small" data-bact="save">存入紀錄本</button>' : ''}
+          <button type="button" class="btn small ghost" data-bact="redo" title="清掉這位的結果，下次批次產生時重寫">重寫</button>
+        </div>
       </article>`;
     }).join('');
+    renderEnteredCount();
+  }
+
+  function renderEnteredCount() {
+    const keys = seatKeys(batch.results).filter((k) => batch.results[k].keyPoints || batch.results[k].contact);
+    const n = keys.filter((k) => batch.results[k].entered).length;
+    $('#enteredCount').textContent = keys.length ? `已登錄 ${n} / ${keys.length} 位` : '';
+    $('#enteredCount').classList.toggle('all-done', keys.length > 0 && n === keys.length);
+    $('#btnNextEntry').hidden = !keys.length || n === keys.length;
+  }
+
+  // 跳到下一位還沒登錄的學生，並先複製好「輔導內容重點」
+  function gotoNextEntry() {
+    const k = seatKeys(batch.results).find((x) => (batch.results[x].keyPoints || batch.results[x].contact) && !batch.results[x].entered);
+    if (!k) { toast('這批都登錄完了 🎉'); return; }
+    const card = $(`.batch-card[data-seat="${k}"]`);
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.remove('flash');
+    void card.offsetWidth;
+    card.classList.add('flash');
+    copyText(batch.results[k].keyPoints).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的「輔導內容重點」，貼上後再按「聯繫內容」旁的複製` : '複製失敗', ok ? '' : 'error', 4000));
   }
 
   function seatRecord(k) {
@@ -903,7 +987,7 @@
       id: uid(),
       savedAt: new Date().toISOString(),
       form: {
-        studentName: `${k} 號`, otherNames: '', grade: c.grade, date: c.date, target: c.target, method: c.method,
+        studentName: seatLabel(k), otherNames: '', grade: c.grade, date: c.date, target: c.target, method: c.method,
         location: '', categories: c.categories, details: c.details, actions: c.actions,
         event: c.event, handling: '', response: '', length: c.length, tone: c.tone, restoreNames: false,
       },
@@ -917,8 +1001,15 @@
     if (!btn) return;
     const k = btn.closest('.batch-card').dataset.seat;
     const r = batch.results[k];
-    if (btn.dataset.bact === 'copy') {
-      copyText(`輔導內容重點：${r.keyPoints}\n\n聯繫內容：${r.contact}`).then((ok) => toast(ok ? `已複製 ${k} 號 ✓` : '複製失敗', ok ? '' : 'error'));
+    if (btn.dataset.bact === 'copyKp' || btn.dataset.bact === 'copyCt') {
+      const isKp = btn.dataset.bact === 'copyKp';
+      copyText(isKp ? r.keyPoints : r.contact).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的${isKp ? '輔導內容重點' : '聯繫內容'} ✓` : '複製失敗', ok ? '' : 'error'));
+    } else if (btn.dataset.bact === 'entered') {
+      r.entered = !r.entered;
+      saveBatchSoon();
+      renderBatchResults();
+      renderSeatGrid();
+      if (r.entered) toast(`${seatLabel(k)} 已標記為登錄完成 ✓`);
     } else if (btn.dataset.bact === 'save') {
       if (!r.keyPoints && !r.contact) { toast('這位的結果是空的', 'error'); return; }
       if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
@@ -949,7 +1040,7 @@
     });
     saveHistory(list);
     renderHistoryCount();
-    toast(`已把 ${keys.length} 位存入紀錄本 💾`);
+    toast(`已把 ${keys.length} 位存入紀錄本 💾${backupNudge()}`, '', backupNeeded() ? 4500 : 2600);
   }
 
   function batchReset() {
@@ -980,7 +1071,10 @@
       '輔導內容重點：（一段文字）',
       '聯繫內容：（一段文字）',
     );
-    const blocks = selected.map((k) => [`### 【${k}號】的輔導資料`, ...caseLines(seatCase(k), (s) => deidentify(s, []))].join('\n'));
+    const blocks = selected.map((k) => {
+      const aliases = seatAliases(k);
+      return [`### 【${k}號】的輔導資料`, ...caseLines(seatCase(k), (s) => deidentify(s, aliases))].join('\n');
+    });
     const ok = await copyText(`${system.join('\n')}\n\n${blocks.join('\n\n')}`);
     if (!ok) { toast('複製失敗，請再試一次', 'error'); return; }
     $('#batchPasteBack').open = true;
@@ -1018,12 +1112,16 @@
     list.unshift({ id: uid(), savedAt: new Date().toISOString(), form: readForm(), keyPoints, contact });
     saveHistory(list);
     renderHistoryCount();
-    toast('已存入紀錄本 💾');
+    toast(`已存入紀錄本 💾${backupNudge()}`, '', backupNeeded() ? 4500 : 2600);
   }
 
   function renderHistoryCount() {
     $('#historyCount').textContent = loadHistory().length;
+    const need = backupNeeded();
+    $('#historyCount').classList.toggle('warn', need);
+    $('#btnHistory').title = need ? '有紀錄還沒備份，建議打開紀錄本按「備份成檔案」' : '已儲存的輔導紀錄';
   }
+  const backupNudge = () => (backupNeeded() ? '（有 ' + unbackedCount() + ' 筆還沒備份，記得到紀錄本備份）' : '');
 
   function renderHistory() {
     const q = $('#historySearch').value.trim();
@@ -1102,6 +1200,120 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ---------- 備份與還原 ----------
+  const BACKUP_TYPE = 'counseling-record-helper-backup';
+  const getLastBackup = () => store.get('localStorage', KEYS.lastBackup) || '';
+  const unbackedCount = () => {
+    const last = getLastBackup();
+    return loadHistory().filter((r) => !last || (r.savedAt || '') > last).length;
+  };
+  // 新增 5 筆以上沒備份，或距上次備份超過 14 天且有新紀錄，就提醒
+  function backupNeeded() {
+    const n = unbackedCount();
+    if (n >= 5) return true;
+    const last = getLastBackup();
+    return n > 0 && !!last && Date.now() - new Date(last).getTime() > 14 * 86400000;
+  }
+  function fmtDateTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getFullYear() - 1911}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  function renderBackupHint() {
+    const el = $('#backupHint');
+    const total = loadHistory().length;
+    const last = getLastBackup();
+    const n = unbackedCount();
+    const need = backupNeeded();
+    el.className = `backup-hint${need ? ' need' : ''}`;
+    if (!total) { el.textContent = '紀錄本還是空的。存入紀錄後，記得定期「備份成檔案」，換電腦或清除瀏覽資料也不怕。'; return; }
+    el.textContent = last
+      ? `上次備份：${fmtDateTime(last)}${n ? `，之後新增了 ${n} 筆還沒備份` : '，目前都已備份 ✓'}`
+      : `這 ${total} 筆紀錄還沒備份過。清除瀏覽資料或換電腦就會不見，建議現在「備份成檔案」。`;
+  }
+  function downloadFile(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportBackup() {
+    const records = loadHistory();
+    if (!records.length && !Object.keys(roster).length) { toast('紀錄本和名冊都是空的，不需要備份', 'error'); return; }
+    const data = { type: BACKUP_TYPE, version: 1, exportedAt: new Date().toISOString(), records, roster };
+    downloadFile(`輔導紀錄備份_${todayStr()}.json`, JSON.stringify(data, null, 2), 'application/json');
+    store.set('localStorage', KEYS.lastBackup, new Date().toISOString());
+    renderBackupHint();
+    renderHistoryCount();
+    toast(`已備份 ${records.length} 筆紀錄${Object.keys(roster).length ? '與班級名冊' : ''}。檔案含學生姓名，請妥善保存 🔒`, '', 4500);
+  }
+  async function importBackup(file) {
+    let data;
+    try { data = JSON.parse(await file.text()); } catch { toast('這個檔案無法讀取，請確認是本工具的備份檔（.json）', 'error', 5000); return; }
+    if (!data || data.type !== BACKUP_TYPE || !Array.isArray(data.records)) {
+      toast('這不是輔導紀錄小幫手的備份檔', 'error', 5000);
+      return;
+    }
+    const list = loadHistory();
+    const ids = new Set(list.map((r) => r.id));
+    const fresh = data.records.filter((r) => r && r.id && (r.keyPoints || r.contact) && !ids.has(r.id));
+    const merged = [...list, ...fresh].sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')));
+    saveHistory(merged);
+    let rosterMsg = '';
+    const incoming = data.roster && typeof data.roster === 'object' ? data.roster : {};
+    if (Object.keys(incoming).length) {
+      const same = JSON.stringify(incoming) === JSON.stringify(roster);
+      if (!Object.keys(roster).length || (!same && confirm('備份檔裡有班級名冊，要用它取代目前的名冊嗎？'))) {
+        saveRoster(incoming);
+        renderRosterList();
+        rosterMsg = '，並還原班級名冊';
+      }
+    }
+    renderHistory();
+    renderHistoryCount();
+    renderBackupHint();
+    renderSeatGrid();
+    renderBatchResults();
+    toast(`已還原 ${fresh.length} 筆紀錄${data.records.length - fresh.length ? `（略過 ${data.records.length - fresh.length} 筆已存在的）` : ''}${rosterMsg} ✓`, '', 4500);
+  }
+
+  // ---------- 班級名冊視窗 ----------
+  function renderRosterList() {
+    $('#rosterList').innerHTML = Object.keys(roster).map(Number).sort((a, b) => a - b)
+      .map((k) => `<option value="${escapeHtml(roster[k])}">${k} 號</option>`).join('');
+    const n = Object.keys(roster).length;
+    $$('.roster-count').forEach((el) => { el.textContent = n ? `${n} 人` : ''; });
+  }
+  function previewRoster() {
+    const { map, bad } = parseRoster($('#rosterText').value);
+    const n = Object.keys(map).length;
+    const el = $('#rosterPreview');
+    el.className = `roster-preview${bad.length ? ' warn' : ''}`;
+    el.textContent = n || bad.length
+      ? `已辨識 ${n} 位${bad.length ? `；有 ${bad.length} 行看不懂（例如「${bad[0].slice(0, 12)}」），請改成「座號 姓名」` : ' ✓'}`
+      : '每行一位，例如「1 王小明」。也可以直接從 Excel 複製「座號、姓名」兩欄貼上。';
+  }
+  function openRoster() {
+    $('#rosterText').value = rosterToText(roster);
+    previewRoster();
+    $('#rosterDialog').showModal();
+  }
+  function saveRosterFromDialog() {
+    const { map, bad } = parseRoster($('#rosterText').value);
+    if (bad.length && !confirm(`有 ${bad.length} 行看不懂，會被略過。仍要儲存嗎？`)) return;
+    saveRoster(map);
+    renderRosterList();
+    renderSeatGrid();
+    renderSeatEditor();
+    renderBatchResults();
+    $('#rosterDialog').close();
+    toast(Object.keys(map).length ? `已儲存 ${Object.keys(map).length} 位學生的名冊（只存在這台電腦）` : '已清空名冊');
   }
 
   // ---------- 列印 ----------
@@ -1419,8 +1631,25 @@
     $('#btnHistory').addEventListener('click', () => {
       $('#historySearch').value = '';
       renderHistory();
+      renderBackupHint();
       $('#historyDialog').showModal();
     });
+    $('#btnBackup').addEventListener('click', exportBackup);
+    $('#btnRestore').addEventListener('click', () => $('#restoreFile').click());
+    $('#restoreFile').addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) importBackup(f);
+      e.target.value = '';
+    });
+
+    // 班級名冊
+    $$('.btn-roster').forEach((b) => b.addEventListener('click', openRoster));
+    $('#rosterText').addEventListener('input', previewRoster);
+    $('#btnSaveRoster').addEventListener('click', saveRosterFromDialog);
+    $('#btnClearRoster').addEventListener('click', () => {
+      if (!$('#rosterText').value.trim() || confirm('確定清空名冊？')) { $('#rosterText').value = ''; previewRoster(); }
+    });
+    $('#btnNextEntry').addEventListener('click', gotoNextEntry);
     $('#historySearch').addEventListener('input', renderHistory);
     $('#historyList').addEventListener('click', onHistoryClick);
     $('#btnExportCsv').addEventListener('click', exportCsv);
@@ -1447,6 +1676,7 @@
   updateCounts();
   renderKeyDot();
   renderHistoryCount();
+  renderRosterList();
   fillBatchCommon();
   renderSeatGrid();
   renderSeatEditor();

@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-5">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-5">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-7">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-7">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-5">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-7">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.20-5">
-  <script src="sw-register.js?v=2026.10.20-5" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.20-7">
+  <script src="sw-register.js?v=2026.10.20-7" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -69,8 +69,10 @@
 
         <div class="grid-3">
           <label class="field">
-            <span class="field-label">學生姓名 <small>（不會送出）</small></span>
-            <input id="studentName" placeholder="例：王小明" autocomplete="off">
+            <span class="field-label field-label-row">學生姓名 <small>（不會送出）</small>
+              <button type="button" class="link-btn btn-roster" title="管理班級名冊（只存在這台電腦）">👥 名冊 <span class="roster-count"></span></button></span>
+            <input id="studentName" placeholder="例：王小明" autocomplete="off" list="rosterList">
+            <datalist id="rosterList"></datalist>
           </label>
           <label class="field">
             <span class="field-label">年級</span>
@@ -249,14 +251,18 @@
         <section class="card seat-card" aria-labelledby="seatCardTitle">
           <div class="card-head">
             <h2 id="seatCardTitle"><span class="step">1</span>點選座號</h2>
-            <span class="muted" id="seatCount">已選 0 / 10 人</span>
+            <div class="head-actions">
+              <span class="muted" id="seatCount">已選 0 / 10 人</span>
+              <button type="button" class="btn small btn-roster" title="管理班級名冊（只存在這台電腦）">👥 名冊 <span class="roster-count"></span></button>
+            </div>
           </div>
-          <p class="privacy-note">🔒 批次模式只用座號，不需要輸入學生姓名。一次最多 10 位，避免超過免費額度。</p>
+          <p class="privacy-note">🔒 批次模式送給 AI 的只有座號。設定「班級名冊」後，畫面上會顯示姓名方便登錄，但姓名不會送出。一次最多 10 位。</p>
           <div class="seat-grid" id="seatGrid" aria-label="座號"></div>
           <div class="legend">
             <span><i class="lg active"></i>編輯中</span>
             <span><i class="lg selected"></i>已選取</span>
             <span><i class="lg done"></i>已產生</span>
+            <span><i class="lg entered"></i>已登錄</span>
           </div>
 
           <h3 class="sub-title">共同設定 <small>（套用到這批學生）</small></h3>
@@ -339,6 +345,8 @@
         <div class="card-head">
           <h2 id="batchResultsTitle"><span class="step">3</span>批次結果</h2>
           <div class="head-actions">
+            <span class="entered-count" id="enteredCount"></span>
+            <button type="button" class="btn small primary" id="btnNextEntry" hidden title="捲到下一位還沒登錄的學生，並先複製「輔導內容重點」">▶ 下一位未登錄</button>
             <button type="button" class="btn small" id="btnBatchSaveAll">💾 全部存入紀錄本</button>
             <button type="button" class="btn small danger-ghost" id="btnBatchReset">清空這批</button>
           </div>
@@ -409,7 +417,13 @@
         <h2 id="historyTitle">📚 紀錄本</h2>
         <button type="button" class="icon-btn" data-close aria-label="關閉">✕</button>
       </div>
-      <p class="small-text">紀錄只存在這個瀏覽器。公用電腦用完請匯出後按「全部清除」。</p>
+      <p class="backup-hint" id="backupHint" role="status"></p>
+      <div class="backup-actions">
+        <button type="button" class="btn primary" id="btnBackup">💾 備份成檔案</button>
+        <button type="button" class="btn" id="btnRestore">📂 從檔案還原</button>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="small-text">備份檔含紀錄與班級名冊（有學生姓名），請存在自己的電腦或學校雲端硬碟，不要傳到公開群組。</p>
       <div class="input-row">
         <input id="historySearch" type="search" placeholder="搜尋姓名、座號、日期、類別或內容">
       </div>
@@ -421,9 +435,29 @@
     </div>
   </dialog>
 
+  <!-- 班級名冊 -->
+  <dialog id="rosterDialog" class="modal" aria-labelledby="rosterTitle">
+    <div class="modal-inner">
+      <div class="modal-head">
+        <h2 id="rosterTitle">👥 班級名冊</h2>
+        <button type="button" class="icon-btn" data-close aria-label="關閉">✕</button>
+      </div>
+      <p>名冊<strong>只存在這台電腦</strong>，不會送給 AI。設定後：批次結果會顯示姓名方便登錄；寫個別紀錄時，敘述中出現的同學姓名也會自動換成代號。</p>
+      <label class="field">
+        <span class="field-label">每行一位：座號 姓名</span>
+        <textarea id="rosterText" rows="10" spellcheck="false" placeholder="1 王小明&#10;2 李大同&#10;3 陳美美&#10;（也可以直接從 Excel 複製「座號、姓名」兩欄貼上）"></textarea>
+      </label>
+      <p class="roster-preview" id="rosterPreview" role="status"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn danger-ghost" id="btnClearRoster">清空</button>
+        <button type="button" class="btn primary" id="btnSaveRoster">儲存名冊</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.20-5"></script>
+  <script src="app.js?v=2026.10.20-7"></script>
 </body>
 </html>

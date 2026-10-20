@@ -76,8 +76,8 @@ a { color: var(--primary); }
   border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 22px clamp(16px, 2vw, 30px);
 }
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.card-head h2 { margin: 0; font-size: var(--fs-lg); display: flex; align-items: center; gap: 10px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 12px; }
+.card-head h2 { white-space: nowrap; margin: 0; font-size: var(--fs-lg); display: flex; align-items: center; gap: 10px; }
 .step {
   display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   background: var(--primary); color: #fff; font-size: var(--fs-base);
@@ -403,3 +403,34 @@ input:focus, select:focus, textarea:focus {
 
 .version-tag { font-size: var(--fs-xs); opacity: .7; letter-spacing: .03em; }
 .version-tag:empty { display: none; }
+
+/* ===== 班級名冊、備份、逐位登錄 ===== */
+.field-label-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.field-label-row .btn-roster { margin-left: auto; font-weight: 600; }
+.roster-count { font-size: var(--fs-xs); color: var(--primary); }
+#rosterText { font-size: var(--fs-md); line-height: 1.8; }
+.roster-preview { margin: -6px 0 0; font-size: var(--fs-sm); color: #2a7a54; }
+.roster-preview.warn { color: var(--danger); }
+
+.backup-hint { margin: 4px 0 10px; padding: 10px 14px; border-radius: 10px; background: var(--primary-soft); color: #1f4d44; font-size: var(--fs-sm); }
+.backup-hint.need { background: #fff4e5; border: 1px solid #f1d2a8; color: #7a4a14; font-weight: 600; }
+.backup-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.badge.warn { background: var(--accent); color: #fff; }
+
+.entered-count { font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.entered-count.all-done { color: #2a7a54; }
+.seat-name { font-weight: 700; font-size: var(--fs-md); }
+.entered-pill { background: #d8efe1; color: #1f6b43; border-radius: 999px; padding: 2px 10px; font-size: var(--fs-sm); font-weight: 700; }
+.field-copy { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.field-copy .mini-label { margin: 0; }
+.field-copy .btn.small { padding: 4px 12px; }
+.batch-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.batch-card.entered { background: #f3faf6; border-color: #a9d8bd; }
+.batch-card.entered textarea { color: var(--muted); }
+.batch-card.flash { animation: cardFlash 1.4s ease-out; }
+@keyframes cardFlash { 0%, 40% { box-shadow: 0 0 0 4px rgba(217, 130, 43, .55); } 100% { box-shadow: 0 0 0 0 rgba(217, 130, 43, 0); } }
+.seat.entered { background: #d8efe1; border-color: #7bbf98; color: #1f6b43; }
+.seat.entered::after { content: "\2713"; position: absolute; top: 1px; right: 4px; font-size: .7rem; color: #1f6b43; }
+.seat.active.entered { background: var(--primary); color: #fff; }
+.lg.entered { background: #d8efe1; border-color: #7bbf98; }
+@media (prefers-reduced-motion: reduce) { .batch-card.flash { animation: none; } }
