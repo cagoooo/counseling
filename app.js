@@ -39,8 +39,8 @@
   };
   const TARGET_RULE = {
     student: '本次為教師與學生本人晤談，教師「沒有」聯繫家長。內容不得提及聯繫家長、家長回應或請家長配合等事項。',
-    parent: '本次為教師與家長聯繫。請描述聯繫的緣由、與家長溝通的內容、家長的回應，以及親師之間的共識與後續合作方式。',
-    both: '本次教師先與學生本人晤談，並另外聯繫家長。請依序描述與學生的晤談，以及與家長溝通的內容與親師共識。',
+    parent: '本次為教師與家長聯繫。請描述聯繫的緣由與教師向家長說明的內容；家長的回應與親師共識只有資料中有寫才描述，沒寫就不要自行描述家長的反應。',
+    both: '本次教師先與學生本人晤談，並另外聯繫家長。請依序描述與學生的晤談，以及教師向家長說明的內容；家長的回應與親師共識只有資料中有寫才描述，沒寫就不要自行描述家長的反應。',
     teacher: '本次為教師與其他教師或輔導室討論學生狀況。請描述討論的內容、彼此的觀察與後續分工。',
   };
   const LENGTH_SPEC = {
@@ -361,29 +361,30 @@
       '- 主角學生一律稱為「該生」（資料中可能寫作「甲生」）；其他人物保留資料中的代稱（如乙生、丙生），不得自行編造姓名。',
       `- ${TARGET_RULE[c.target] || TARGET_RULE.student}`,
       '- 只根據老師提供的資訊撰寫，不得捏造未提及的事件、對話、診斷或結果，也不要推測學生的心理狀態或家庭背景；資訊不足時用概括的方式描述。',
+      '- 不要自行補上資料裡沒有的細節，例如聯繫家長的管道（電話、聯絡簿、面談）、時間、次數、地點或在場人員。',
+      '- 資料沒有提供的項目（例如事件經過、教師的具體做法、學生的回應）就依狀況細節與教師處置概括帶過；內文絕對不要出現「未說明」「未填寫」「資料未提供」這類字眼，學生沒有表態時就改寫教師後續將持續觀察的重點。',
       '- 把口語轉為專業描述（例如「他說好」→「該生表示願意嘗試」、「很兇」→「情緒較為激動」），避免標籤化或貶抑字眼，不做醫療或心理診斷。',
       '- 這是事件紀錄，不是期末評語：不要寫「期許你…」「是個乖巧的孩子」這類對話句或評價句。',
-      '- 「聯繫內容」依序包含：事件經過 → 教師的處理與引導 → 學生的反應或承諾 → 後續可行的做法或教師將持續觀察的重點。',
+      '- 「聯繫內容」依序包含：事件經過 → 教師的處理與引導 → 學生的反應或承諾（只有資料中有寫才寫，沒寫就略過，不要自行寫「表示理解」「願意配合」）→ 後續可行的做法或教師將持續觀察的重點。',
       `- ${tone}`,
     ];
   }
 
   // 把一位學生的資料轉成「輔導資料」區塊（文字已去識別化）
   function caseLines(c, di) {
-    const lines = [
-      `- 日期：${c.date ? rocDate(c.date) : '未提供'}`,
-      `- 年級：${c.grade || '未提供'}`,
-      `- 輔導對象：${TARGET_LABEL[c.target] || TARGET_LABEL.student}`,
-      `- 輔導方式：${c.method}`,
-    ];
+    // 只列出老師有提供的項目；不在資料裡放「未填寫」之類的備註，避免 AI 把備註抄進紀錄
+    const lines = [];
+    if (c.date) lines.push(`- 日期：${rocDate(c.date)}`);
+    if (c.grade) lines.push(`- 年級：${c.grade}`);
+    lines.push(`- 輔導對象：${TARGET_LABEL[c.target] || TARGET_LABEL.student}`);
+    lines.push(`- 輔導方式：${c.method}`);
     if (c.location) lines.push(`- 晤談地點：${c.location}`);
-    lines.push(`- 輔導類別：${c.categories.length ? c.categories.join('、') : '未指定'}`);
-    if (c.details.length) lines.push(`- 狀況細節（老師點選）：${c.details.join('、')}`);
-    if (c.actions.length) lines.push(`- 教師處置（老師點選）：${c.actions.join('、')}`);
-    lines.push(`- 事件經過：${c.event ? di(c.event) : '（老師未另外描述，請依狀況細節概括撰寫，不要捏造具體情節）'}`);
+    if (c.categories.length) lines.push(`- 輔導類別：${c.categories.join('、')}`);
+    if (c.details.length) lines.push(`- 狀況細節：${c.details.join('、')}`);
+    if (c.actions.length) lines.push(`- 教師處置：${c.actions.join('、')}`);
+    if (c.event) lines.push(`- 事件經過：${di(c.event)}`);
     if (c.handling) lines.push(`- 教師的處理與引導：${di(c.handling)}`);
-    else lines.push(`- 教師的處理與引導：${c.actions.length ? '（請依上述教師處置概括描述）' : '（老師未填寫，請依事件性質以一般合宜的輔導方式概括描述，不要捏造具體對話）'}`);
-    lines.push(`- 學生的回應與後續：${c.response ? di(c.response) : '（老師未填寫，請勿捏造學生的具體承諾，可寫教師將持續觀察）'}`);
+    if (c.response) lines.push(`- 學生的回應與後續：${di(c.response)}`);
     return lines;
   }
 
