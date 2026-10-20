@@ -729,6 +729,76 @@
     return false;
   }
 
+  // ---------- 逐步引導：選完自動帶到下一步、產生後自動跳到結果 ----------
+  const touchedSteps = new Set();
+  const motion = () => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+  const singleColumn = () => window.matchMedia('(max-width: 1080px)').matches;
+  function syncStickyHeights() {
+    const root = document.documentElement.style;
+    root.setProperty('--topbar-h', `${$('.topbar').offsetHeight}px`);
+    root.setProperty('--stepper-h', `${$('#stepper').offsetHeight || 0}px`);
+  }
+  const stickyTop = () => $('.topbar').offsetHeight + ($('#viewSingle').hidden ? 0 : $('#stepper').offsetHeight);
+  function flash(el, cls = 'guide-flash') {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 2200);
+  }
+  // 把下一個要填的地方帶進畫面：已經完整看得到就不捲，只閃一下提示
+  function guideTo(el, { block = 'center', force = false, highlight = true } = {}) {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const visible = r.top >= stickyTop() + 4 && r.bottom <= window.innerHeight - 4;
+    if (force || !visible) el.scrollIntoView({ behavior: motion(), block });
+    if (highlight) flash(el);
+  }
+  const fieldOf = (sel) => $(sel).closest('.field, .opt-row, fieldset') || $(sel);
+  const stepEl = (n) => (n === 6 ? $('#outputCard') : $(`#step${n}`));
+  function goStep(n, { focus = false } = {}) {
+    guideTo(stepEl(n), { block: 'start', force: true });
+    if (focus && n === 4 && window.matchMedia('(pointer: fine)').matches) {
+      setTimeout(() => $('#event').focus({ preventScroll: true }), 450);
+    }
+  }
+  function stepDone(n, f) {
+    switch (n) {
+      case 1: return !!(f.studentName || f.grade);
+      case 2: return touchedSteps.has(2) || !!(f.categories.length || f.details.length || f.event);
+      case 3: return !!(f.categories.length || f.details.length);
+      case 4: return !!(f.event || f.handling || f.response);
+      case 5: return touchedSteps.has(5) || !!($('#keyPoints').value.trim() || $('#contact').value.trim());
+      default: return !!($('#keyPoints').value.trim() || $('#contact').value.trim());
+    }
+  }
+  function currentStep() {
+    const line = stickyTop() + 80;
+    let cur = 1;
+    const last = singleColumn() ? 6 : 5; // 電腦雙欄時結果在右邊，不參與捲動位置判斷
+    for (let n = 1; n <= last; n += 1) {
+      if (stepEl(n).getBoundingClientRect().top <= line) cur = n;
+    }
+    return cur;
+  }
+  function renderStepper() {
+    if ($('#viewSingle').hidden) return;
+    const f = readForm();
+    const cur = currentStep();
+    $$('#stepper button').forEach((b) => {
+      const n = Number(b.dataset.step);
+      const done = stepDone(n, f);
+      b.classList.toggle('done', done);
+      b.classList.toggle('current', n === cur);
+      b.querySelector('.dot').textContent = done && n !== cur ? '✓' : String(n);
+      if (n === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+  }
+  let stepperRaf = 0;
+  const renderStepperSoon = () => {
+    if (stepperRaf) return;
+    stepperRaf = requestAnimationFrame(() => { stepperRaf = 0; renderStepper(); });
+  };
+
   // ---------- 個別輔導：產生與改寫 ----------
   let busy = false;
   function setBusy(on, text = 'AI 正在撰寫紀錄…') {
@@ -756,13 +826,15 @@
     const form = readForm();
     if (!form.event && !form.details.length) {
       toast('請填寫「事件經過」，或點選至少一個常見狀況', 'error');
-      $('#event').focus();
+      goStep(4, { focus: true });
       return;
     }
     if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
     const { system, user, aliases } = buildMessages(form, 'json');
     setBusy(true);
     setStatus('AI 整理中…');
+    // 按下就先帶到結果區（看得到「AI 正在撰寫」），所有螢幕寬度都要
+    guideTo($('#outputCard'), { block: 'start', force: true, highlight: false });
     try {
       const model = await ensureModel();
       const r = await callGemini(system, user, {
@@ -774,9 +846,9 @@
       updateCounts();
       saveDraft();
       setStatus(`完成 ✓（${model}）`, 'ok');
-      if (window.matchMedia('(max-width: 1080px)').matches) {
-        $('#outputCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      touchedSteps.add(5);
+      guideTo($('#outputCard'), { block: 'start' });
+      renderStepper();
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setModel('');
       setStatus('產生失敗', 'err');
@@ -853,6 +925,7 @@
     }
     $('#pasteBack').open = true;
     toast('已複製！到 Gemini 貼上送出，再把回覆貼回右邊的「貼回來」區。', '', 5000);
+    guideTo($('#pasteBack'), { block: 'center' });
     window.open('https://gemini.google.com/app', '_blank', 'noopener');
   }
 
@@ -967,7 +1040,7 @@
     renderSeatGrid();
     renderSeatEditor();
     saveBatchSoon();
-    if (window.matchMedia('(max-width: 1080px)').matches) $('.seat-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    guideTo($('.seat-editor'), { block: 'start' });
   }
 
   function removeActiveSeat() {
@@ -1026,6 +1099,7 @@
     batchBusy = true;
     $('#btnBatchGenerate').disabled = true;
     $('#btnBatchGenerate').classList.add('loading');
+    guideTo($('.batch-results'), { block: 'start', force: true, highlight: false });
     let done = 0;
     let failed = 0;
     try {
@@ -1391,6 +1465,7 @@
       saveDraft();
       $('#historyDialog').close();
       setStatus('已載入紀錄', 'ok');
+      guideTo($('#outputCard'), { block: 'start', force: true });
     } else if (btn.dataset.act === 'copy') {
       copyText(`${fmt.kpLabel}：${rec.keyPoints}\n\n${fmt.ctLabel}：${rec.contact}`).then((ok) => toast(ok ? '已複製' : '複製失敗', ok ? '' : 'error'));
     } else if (btn.dataset.act === 'delete') {
@@ -1742,6 +1817,8 @@
     $('#tabSingle').setAttribute('aria-selected', String(!isBatch));
     $('#tabBatch').setAttribute('aria-selected', String(isBatch));
     store.set('localStorage', KEYS.view, view);
+    syncStickyHeights();
+    renderStepperSoon();
   }
 
   // ---------- 綁定 ----------
@@ -1758,6 +1835,7 @@
     refreshSingleTagState();
     saveDraftSoon();
     updatePeek();
+    goStep(5);
   }
 
   function clearAll() {
@@ -1825,6 +1903,26 @@
       ta.setSelectionRange(i, i + it.word.length);
     });
     $('#btnCopyPrompt').addEventListener('click', copyPrompt);
+
+    // 逐步引導
+    $$('#stepper button').forEach((b) => b.addEventListener('click', () => goStep(Number(b.dataset.step))));
+    $$('.next-step[data-next]').forEach((b) => b.addEventListener('click', () => goStep(Number(b.dataset.next), { focus: true })));
+    $('#grade').addEventListener('change', () => guideTo(fieldOf('#otherNames')));
+    $$('input[name=target]').forEach((r) => r.addEventListener('change', () => { touchedSteps.add(2); guideTo(fieldOf('#method')); }));
+    $('#method').addEventListener('change', () => { touchedSteps.add(2); guideTo(fieldOf('#location')); });
+    $('#location').addEventListener('change', () => { touchedSteps.add(2); goStep(3); });
+    $$('input[name=length]').forEach((r) => r.addEventListener('change', () => { touchedSteps.add(5); guideTo($('input[name=tone]').closest('.opt-row')); }));
+    $$('input[name=tone]').forEach((r) => r.addEventListener('change', () => {
+      touchedSteps.add(5);
+      guideTo($('#viewSingle .actions'), { highlight: false });
+      flash($('#btnGenerate'), 'pulse-cta');
+    }));
+    $('#viewSingle').addEventListener('input', renderStepperSoon);
+    $('#viewSingle').addEventListener('change', renderStepperSoon);
+    $('#viewSingle').addEventListener('click', renderStepperSoon);
+    window.addEventListener('scroll', renderStepperSoon, { passive: true });
+    window.addEventListener('resize', () => { syncStickyHeights(); renderStepperSoon(); });
+    $('#btnSeatDone').addEventListener('click', () => guideTo($('.seat-card'), { block: 'start' }));
     $('#btnParse').addEventListener('click', parsePasted);
     $('#btnClear').addEventListener('click', clearAll);
     $('#btnSave').addEventListener('click', saveRecord);
@@ -2026,6 +2124,7 @@
   setupSpeech();
   bind();
   applyFormat();
+  syncStickyHeights();
   switchView(store.get('localStorage', KEYS.view) === 'batch' ? 'batch' : 'single');
   // 第一次來的老師自動顯示使用說明
   if (!store.get('localStorage', KEYS.onboarded) && !/[?&]swdemo=1/.test(location.search)) {

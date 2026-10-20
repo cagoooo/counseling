@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-14">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-14">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-14">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.20-14">
-  <script src="sw-register.js?v=2026.10.20-14" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.20-15">
+  <script src="sw-register.js?v=2026.10.20-15" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -71,8 +71,18 @@
           <button type="button" class="link-btn" id="btnClear">全部清空</button>
         </div>
 
+        <nav class="stepper" id="stepper" aria-label="填寫步驟">
+          <button type="button" data-step="1"><span class="dot">1</span><span class="lbl">學生</span></button>
+          <button type="button" data-step="2"><span class="dot">2</span><span class="lbl">對象</span></button>
+          <button type="button" data-step="3"><span class="dot">3</span><span class="lbl">狀況</span></button>
+          <button type="button" data-step="4"><span class="dot">4</span><span class="lbl">經過</span></button>
+          <button type="button" data-step="5"><span class="dot">5</span><span class="lbl">設定</span></button>
+          <button type="button" data-step="6"><span class="dot">6</span><span class="lbl">結果</span></button>
+        </nav>
+
         <p class="privacy-note">🔒 學生姓名只留在你的電腦；送給 AI 前會自動換成「甲生、乙生」代號，電話與身分證字號也會遮蔽。</p>
 
+        <h3 class="step-head first" id="step1"><span class="step-no">1</span>學生資料</h3>
         <div class="grid-3">
           <label class="field">
             <span class="field-label field-label-row">學生姓名 <small>（不會送出）</small>
@@ -107,6 +117,9 @@
           </label>
           <select id="followupSelect" disabled aria-label="選擇要參考的過去紀錄"></select>
         </div>
+        <button type="button" class="next-step" data-next="2">下一步：輔導對象與方式 ↓</button>
+
+        <h3 class="step-head" id="step2"><span class="step-no">2</span>輔導對象與方式 <small>選好會自動帶到下一步</small></h3>
 
         <fieldset class="field">
           <legend class="field-label">輔導對象</legend>
@@ -129,6 +142,7 @@
           </label>
         </div>
 
+        <h3 class="step-head" id="step3"><span class="step-no">3</span>發生了什麼狀況 <small>點選標籤，或直接到下一步用說的</small></h3>
         <fieldset class="field">
           <legend class="field-label">輔導類別 <small>（可複選；點下方常見狀況會自動勾選）</small></legend>
           <div class="chips" id="categories"></div>
@@ -139,7 +153,9 @@
           <div class="taglib-body" id="singleTagLib"></div>
         </details>
         <div class="report-notice" id="reportNotice" hidden></div>
+        <button type="button" class="next-step" data-next="4">選好了，下一步：描述事件經過 ↓</button>
 
+        <h3 class="step-head" id="step4"><span class="step-no">4</span>事件經過與處理</h3>
         <div class="field">
           <div class="field-head">
             <label class="field-label" for="event">事件經過 <em class="req" id="eventReq">必填</em></label>
@@ -165,7 +181,9 @@
           </div>
           <textarea id="response" rows="3" placeholder="例：他承認推人不對，主動向同學道歉，答應下次先用說的。"></textarea>
         </div>
+        <button type="button" class="next-step" data-next="5">寫好了，下一步：輸出設定 ↓</button>
 
+        <h3 class="step-head" id="step5"><span class="step-no">5</span>輸出設定與產生 <small>選好語氣會自動帶到產生按鈕</small></h3>
         <details class="options" open>
           <summary>輸出設定</summary>
           <div class="options-body">
@@ -346,6 +364,7 @@
               <span class="field-label">補充說明 <small>（選填，用代稱不要寫姓名）</small></span>
               <textarea id="bNote" rows="3" placeholder="例：和同學搶球推人，已道歉；答應下次先用說的。"></textarea>
             </label>
+            <button type="button" class="next-step" id="btnSeatDone">✓ 這位好了，選下一位 ↑</button>
           </div>
         </section>
       </div>
@@ -576,6 +595,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.20-14"></script>
+  <script src="app.js?v=2026.10.20-15"></script>
 </body>
 </html>

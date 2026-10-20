@@ -385,3 +385,75 @@ for (const vp of [{ name: '手機', width: 375, height: 812, minFont: 14 }, { na
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// 逐步引導：選完自動帶到下一步、產生後自動跳到結果（電腦與手機都要）
+const topOf = (page, sel) => page.evaluate((s) => Math.round(document.querySelector(s).getBoundingClientRect().top), sel);
+const inView = (page, sel) => page.evaluate((s) => {
+  const r = document.querySelector(s).getBoundingClientRect();
+  return r.top >= 0 && r.top < innerHeight - 40;
+}, sel);
+
+for (const vp of [{ name: '電腦', width: 1440, height: 900 }, { name: '手機', width: 375, height: 812 }]) {
+  test(`逐步引導（${vp.name}）：單選題選完自動前進，選好語氣帶到產生按鈕，按下產生跳到結果`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await mockGemini(page);
+    await ready(page);
+    await page.goto('/');
+    // 步驟 2：選「輔導對象」→ 輔導方式欄位被帶進畫面並閃一下
+    await page.locator('input[name=target][value=parent] + span').click();
+    await expect.poll(() => inView(page, '#method')).toBe(true);
+    // 選完「晤談地點」→ 自動帶到步驟 3 標題（停在步驟條下方）
+    await page.selectOption('#location', '輔導室');
+    await expect.poll(async () => {
+      const t = await topOf(page, '#step3');
+      const limit = await page.evaluate(() => document.querySelector('.topbar').offsetHeight + document.querySelector('#stepper').offsetHeight);
+      return t >= limit - 2 && t <= limit + 40;
+    }).toBe(true);
+    // 步驟條標示目前在第 3 步
+    await expect(page.locator('#stepper button[data-step="3"]')).toHaveClass(/current/);
+    // 「下一步」按鈕帶到步驟 4
+    await page.click('.next-step[data-next="4"]');
+    await expect.poll(() => inView(page, '#event')).toBe(true);
+    await page.fill('#event', '下課推人');
+    // 步驟 5：選語氣 → 產生按鈕進入畫面並發光提醒
+    await page.locator('input[name=tone][value=warm] + span').click();
+    await expect(page.locator('#btnGenerate')).toHaveClass(/pulse-cta/);
+    await expect.poll(() => inView(page, '#btnGenerate')).toBe(true);
+    // 按下產生 → 自動跳到結果區
+    await page.click('#btnGenerate');
+    await expect(page.locator('#status')).toContainText('完成', { timeout: 10000 });
+    await expect.poll(() => inView(page, '#outputCard')).toBe(true);
+    await expect.poll(() => topOf(page, '#outputCard')).toBeLessThan(260);
+    await expect(page.locator('#stepper button[data-step="6"]')).toHaveClass(/done/);
+  });
+}
+
+test('逐步引導：沒寫事件就按產生，會帶回步驟 4；套用範例後直接帶到輸出設定', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockGemini(page);
+  await ready(page);
+  await page.goto('/');
+  await page.locator('#btnGenerate').scrollIntoViewIfNeeded();
+  await page.click('#btnGenerate');
+  await expect.poll(() => inView(page, '#step4')).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.click('.tpl >> nth=0');
+  await expect.poll(() => inView(page, '#step5')).toBe(true);
+});
+
+test('逐步引導（手機批次）：點座號帶到勾選區，按開始產生帶到結果區', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockGemini(page);
+  await ready(page);
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.click('.seat[data-seat="4"]');
+  await expect.poll(() => inView(page, '.seat-editor')).toBe(true);
+  await page.click('#batchTagLib [data-tag="遲到"]');
+  await page.click('#btnSeatDone');
+  await expect.poll(() => inView(page, '.seat-card')).toBe(true);
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('全部完成');
+  await expect.poll(() => inView(page, '.batch-results')).toBe(true);
+});
