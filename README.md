@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1 -Notes "這次
 git add -A; git commit -m "feat: ..."; git push
 ```
 
-自動測試（Playwright，使用電腦上的 Microsoft Edge，不需另外下載瀏覽器）共 28 項，涵蓋去識別化與姓名顯示切換、AI 產生與改寫、逐步引導自動跳轉、給建議按鈕、登錄前自動檢查、學校格式、追蹤輔導、名冊、批次、備份還原、紀錄本篩選、公用電腦模式、錯誤處理、列印，以及手機／電腦版面（無水平捲動、頁首不重疊、最小字級）。Gemini 回應全部以模擬取代，不需要金鑰、不花額度。第一次執行前先 `npm install`。
+自動測試（Playwright，使用電腦上的 Microsoft Edge，不需另外下載瀏覽器）共 31 項，涵蓋去識別化與姓名顯示切換、AI 產生與改寫、逐步引導自動跳轉、給建議按鈕、登錄前自動檢查、學校格式、追蹤輔導、名冊、批次、備份還原、紀錄本篩選、公用電腦模式、錯誤處理、列印，以及手機／電腦版面（無水平捲動、頁首不重疊、最小字級）。Gemini 回應全部以模擬取代，不需要金鑰、不花額度。第一次執行前先 `npm install`。
 
 升版腳本會同步 `version.json`、`sw.js`、`sw-register.js` 與 `index.html` 裡所有 `?v=` 版本號。
 

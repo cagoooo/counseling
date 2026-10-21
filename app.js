@@ -2141,6 +2141,29 @@
     });
   }
 
+  // ---------- 草稿日期過期 → 自動改成今天（可一鍵改回） ----------
+  const rocShort = (iso) => {
+    const [y, m, d] = String(iso).split('-').map(Number);
+    return y ? `${y - 1911}/${m}/${d}` : iso;
+  };
+  function refreshStaleDate(inputSel, noteSel, onChange) {
+    const el = $(inputSel);
+    const note = $(noteSel);
+    const old = el.value;
+    const today = todayStr();
+    el.addEventListener('change', () => { note.hidden = true; });
+    if (!old || old >= today) return;
+    el.value = today;
+    onChange();
+    note.hidden = false;
+    note.innerHTML = `📅 草稿日期已自動改成今天　<button type="button" class="link-btn">改回 ${escapeHtml(rocShort(old))}</button>`;
+    note.querySelector('button').addEventListener('click', () => {
+      el.value = old;
+      note.hidden = true;
+      onChange();
+    });
+  }
+
   // ---------- 啟動 ----------
   renderStatic();
   renderPublicBanner();
@@ -2151,6 +2174,8 @@
   renderHistoryCount();
   renderRosterList();
   fillBatchCommon();
+  refreshStaleDate('#date', '#dateNote', () => saveDraftSoon());
+  refreshStaleDate('#bDate', '#bDateNote', () => readBatchCommon());
   renderSeatGrid();
   renderSeatEditor();
   renderBatchResults();

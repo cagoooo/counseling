@@ -1,6 +1,6 @@
 // 輔導紀錄小幫手 Service Worker
 // BUILD_VERSION 每次部署都要變（執行 scripts/bump-version.ps1），瀏覽器才會偵測到新版
-const BUILD_VERSION = '2026.10.21-2';
+const BUILD_VERSION = '2026.10.21-3';
 const CACHE_PREFIX = 'crh-';
 const CACHE = `${CACHE_PREFIX}${BUILD_VERSION}`;
 const PRECACHE = [

@@ -536,3 +536,49 @@ test('姓名（批次）：選「全部用代號」時卡片不出現名冊姓�
   await expect(page.locator('#batchProgressText')).toContainText('全部完成');
   await expect(page.locator('.batch-card[data-seat="1"] [data-field="contact"]')).toHaveValue(/該生與乙生/);
 });
+
+// ---------------------------------------------------------------------------
+test('草稿日期過期：自動改成今天並提示，可一鍵改回原日期（個別與批次）', async ({ page }) => {
+  await ready(page, { storage: {
+    'crh.draft': { form: { date: '2026-01-05', event: '舊草稿' }, keyPoints: '', contact: '' },
+    'crh.batch': { seats: {}, active: null, results: {}, common: { date: '2026-01-05', target: 'student', method: '個別晤談', length: 'short', tone: 'neutral', nameMode: 'real' } },
+  } });
+  await page.goto('/');
+  const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await expect(page.locator('#date')).toHaveValue(today);
+  await expect(page.locator('#dateNote')).toBeVisible();
+  await expect(page.locator('#dateNote')).toContainText('改回 115/1/5');
+  await expect(page.locator('#event')).toHaveValue('舊草稿'); // 其他草稿內容保留
+  await page.click('#dateNote button');
+  await expect(page.locator('#date')).toHaveValue('2026-01-05');
+  await expect(page.locator('#dateNote')).toBeHidden();
+  await page.click('#tabBatch');
+  await expect(page.locator('#bDate')).toHaveValue(today);
+  await expect(page.locator('#bDateNote')).toBeVisible();
+});
+
+test('草稿日期是今天就不提示', async ({ page }) => {
+  await ready(page);
+  await page.goto('/');
+  await expect(page.locator('#dateNote')).toBeHidden();
+});
+
+test('寬螢幕：往下填寫時結果卡片黏在畫面上；手機版不黏', async ({ page }) => {
+  await ready(page);
+  await page.goto('/');
+  // 捲到「產生按鈕」在畫面下方的位置（老師準備按產生的時候），以及捲到步驟 3 中段，結果卡片都要完整在畫面內
+  for (const target of ['#btnGenerate', '#step3']) {
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      window.scrollTo(0, el.getBoundingClientRect().top + scrollY - innerHeight + 160);
+    }, target);
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => { const b = document.querySelector('#outputCard').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, vh: innerHeight }; });
+    expect(r.top, `${target} 時卡片頂端`).toBeGreaterThanOrEqual(0);
+    expect(r.top, `${target} 時卡片頂端`).toBeLessThan(150);
+    expect(r.bottom, `${target} 時卡片底部`).toBeLessThanOrEqual(r.vh + 1); // 整張卡片都在畫面內（太高時卡片內捲動）
+  }
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#outputCard')).position)).not.toBe('sticky');
+});

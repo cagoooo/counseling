@@ -681,3 +681,21 @@ input[type="number"]:focus { outline: none; border-color: var(--primary); box-sh
 a.footer-link { text-decoration: none; display: inline-flex; align-items: center; }
 
 .name-hint { margin: -2px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+
+/* ===== 草稿日期提示 ===== */
+.date-note {
+  display: block; margin-top: 6px; padding: 4px 10px; border-radius: 8px;
+  background: #fff4e5; color: #7a4a14; font-size: var(--fs-sm); line-height: 1.6;
+}
+.date-note .link-btn { color: #7a4a14; font-weight: 700; padding: 0; }
+
+/* ===== 寬螢幕：結果卡片黏在畫面上，左邊往下填也看得到 ===== */
+@media (min-width: 1081px) {
+  #outputCard {
+    position: sticky; top: calc(var(--topbar-h) + 16px);
+    max-height: calc(100vh - var(--topbar-h) - 32px);
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+  /* 左欄捲到底（產生按鈕附近）時，右欄要有空間讓結果卡片繼續完整顯示，不被推上去 */
+  #viewSingle { padding-bottom: min(42vh, 380px); }
+}
