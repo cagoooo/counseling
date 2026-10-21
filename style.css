@@ -679,3 +679,5 @@ input[type="number"]:focus { outline: none; border-color: var(--primary); box-sh
 .footer-bottom { padding-bottom: 84px; }
 
 a.footer-link { text-decoration: none; display: inline-flex; align-items: center; }
+
+.name-hint { margin: -2px 0 0; font-size: var(--fs-sm); color: var(--muted); }

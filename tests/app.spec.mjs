@@ -89,20 +89,20 @@ test('第一次開啟顯示使用說明，第二次不再自動跳出', async ({
   await expect(page.locator('#helpDialog')).toBeVisible();
 });
 
-test('個別產生：姓名、電話、名冊同學都去識別化，輸出用「該生」並可還原同學姓名', async ({ page }) => {
+test('個別產生：送出時姓名、電話、名冊同學都去識別化，結果預設換回真實姓名', async ({ page }) => {
   const calls = await mockGemini(page);
   await ready(page, { storage: { 'crh.roster': { 1: '王小明', 2: '李大同', 3: '陳美美' } } });
   await page.goto('/');
   await page.fill('#studentName', '王小明');
   await page.fill('#event', '小明跟李大同搶球推人，陳美美在旁邊哭了，媽媽電話0912-345-678，身分證A123456789。');
-  await page.check('#restoreNames');
   await generate(page);
   const sent = calls[0].system + calls[0].user;
   for (const leak of ['王小明', '小明', '李大同', '大同', '陳美美', '美美', '0912', 'A123456789']) expect(sent).not.toContain(leak);
   expect(calls[0].user).toContain('甲生跟乙生搶球推人，丙生在旁邊哭了');
   expect(calls[0].user).toContain('[電話已遮蔽]');
-  await expect(page.locator('#keyPoints')).toHaveValue('該生與李大同發生衝突。');
-  await expect(page.locator('#contact')).toHaveValue(/該生向李大同道歉/);
+  expect(calls[0].system).toContain('第一次提到時寫「甲生」');
+  await expect(page.locator('#keyPoints')).toHaveValue('王小明與李大同發生衝突。');
+  await expect(page.locator('#contact')).toHaveValue(/王小明向李大同道歉/);
 });
 
 test('一鍵改寫會重新去識別化，並可復原', async ({ page }) => {
@@ -112,12 +112,12 @@ test('一鍵改寫會重新去識別化，並可復原', async ({ page }) => {
   await page.fill('#studentName', '王小明');
   await page.fill('#otherNames', '李大同');
   await page.fill('#event', '小明推了李大同');
-  await page.check('#restoreNames');
   await generate(page);
+  await expect(page.locator('#keyPoints')).toHaveValue('版本1：王小明與李大同衝突。');
   await page.click('[data-rewrite="gentle"]');
   await expect(page.locator('#keyPoints')).toHaveValue(/版本2/);
   expect(calls[1].user).toContain('改寫');
-  expect(calls[1].user).not.toContain('李大同');
+  expect(calls[1].user).not.toMatch(/李大同|王小明/); // 畫面上是真名，送出前一樣換回代號
   await page.click('#btnUndo');
   await expect(page.locator('#keyPoints')).toHaveValue(/版本1/);
 });
@@ -231,6 +231,7 @@ test('批次補登：產生、顯示名冊姓名、品質檢查、標記已登�
   expect(calls).toHaveLength(2);
   expect(calls.map((c) => c.user).join()).not.toMatch(/王小明|李大同|小明|大同/);
   await expect(page.locator('.batch-card[data-seat="1"] .seat-name')).toHaveText('王小明');
+  await expect(page.locator('.batch-card[data-seat="1"] [data-field="contact"]')).toHaveValue(/王小明與李大同在走廊搶球/);
   await expect(page.locator('.batch-card[data-seat="1"] .qc-mini')).toBeVisible();
   await expect(page.locator('#enteredCount')).toHaveText('已登錄 0 / 2 位');
   await page.click('#btnNextEntry');
@@ -321,7 +322,7 @@ test('不用金鑰：複製提示詞並開啟 Gemini，貼回回覆可自動拆�
   expect(clip).not.toContain('小明');
   await page.fill('#pasteText', '**輔導內容重點：** 甲生下課推人。\n\n**聯繫內容：** 教師引導甲生道歉。');
   await page.click('#btnParse');
-  await expect(page.locator('#keyPoints')).toHaveValue('該生下課推人。');
+  await expect(page.locator('#keyPoints')).toHaveValue('王小明下課推人。');
 });
 
 test('錯誤處理：金鑰無效顯示中文說明；伺服器忙碌會自動重試成功', async ({ page }) => {
@@ -500,3 +501,38 @@ for (const vp of [{ name: '電腦', width: 1440, height: 900 }, { name: '手機'
     expect(box.y + box.height).toBeGreaterThan(vp.height - 40); // 回到個別模式時按鈕降回底部
   });
 }
+
+
+test('姓名：可切換「全部用代號」，產生後切換會即時把結果換過去', async ({ page }) => {
+  await mockGemini(page);
+  await ready(page);
+  await page.goto('/');
+  await expect(page.locator('input[name=nameMode][value=real]')).toBeChecked(); // 預設顯示真實姓名
+  await page.fill('#studentName', '王小明');
+  await page.fill('#otherNames', '李大同');
+  await page.fill('#event', '小明推了李大同');
+  await page.locator('input[name=nameMode][value=code] + span').click();
+  await generate(page);
+  await expect(page.locator('#keyPoints')).toHaveValue('該生與乙生發生衝突。');
+  // 切回顯示真實姓名 → 第一次提到的「該生」換回名字、乙生換回同學名字
+  await page.locator('input[name=nameMode][value=real] + span').click();
+  await expect(page.locator('#keyPoints')).toHaveValue('王小明與李大同發生衝突。');
+  await expect(page.locator('#contact')).toHaveValue(/王小明與李大同在走廊搶球/);
+  // 再切成代號 → 全部換回代號
+  await page.locator('input[name=nameMode][value=code] + span').click();
+  await expect(page.locator('#keyPoints')).toHaveValue('該生與乙生發生衝突。');
+  await expect(page.locator('#contact')).not.toHaveValue(/王小明|李大同/);
+});
+
+test('姓名（批次）：選「全部用代號」時卡片不出現名冊姓名', async ({ page }) => {
+  await mockGemini(page);
+  await ready(page, { storage: { 'crh.roster': { 1: '王小明', 2: '李大同' } } });
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.locator('input[name=bNameMode][value=code] + span').click();
+  await page.click('.seat[data-seat="1"]');
+  await page.click('#batchTagLib [data-tag="同儕衝突"]');
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('全部完成');
+  await expect(page.locator('.batch-card[data-seat="1"] [data-field="contact"]')).toHaveValue(/該生與乙生/);
+});

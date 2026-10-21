@@ -17,7 +17,7 @@ export default defineConfig({
     permissions: ['clipboard-read', 'clipboard-write'],
   },
   webServer: {
-    command: 'python -m http.server 5180',
+    command: 'node tests/serve.mjs 5180',
     url: 'http://localhost:5180/',
     reuseExistingServer: true,
     timeout: 15000,

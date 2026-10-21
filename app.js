@@ -261,7 +261,8 @@
       response: $('#response').value.trim(),
       length: ($('input[name=length]:checked') || {}).value || 'normal',
       tone: ($('input[name=tone]:checked') || {}).value || 'neutral',
-      restoreNames: $('#restoreNames').checked,
+      nameMode: ($('input[name=nameMode]:checked') || {}).value || 'real',
+      restoreNames: (($('input[name=nameMode]:checked') || {}).value || 'real') === 'real',
       followupId: $('#followupOn').checked ? $('#followupSelect').value : '',
     };
   }
@@ -291,7 +292,7 @@
     $('#response').value = f.response || '';
     $$('input[name=length]').forEach((r) => { r.checked = r.value === (f.length || 'normal'); });
     $$('input[name=tone]').forEach((r) => { r.checked = r.value === (f.tone || 'neutral'); });
-    $('#restoreNames').checked = !!f.restoreNames;
+    $$('input[name=nameMode]').forEach((r) => { r.checked = r.value === (f.nameMode || 'real'); });
     refreshFollowup(f.followupId || '');
     $('#followupOn').checked = !!f.followupId && $('#followupSelect').value === f.followupId;
     $('#followupSelect').disabled = !$('#followupOn').checked;
@@ -440,7 +441,9 @@
   }
 
   function postProcess(text, aliases, restore) {
-    let t = toOneParagraph(text).replace(/甲生/g, '該生');
+    let t = toOneParagraph(text);
+    const main = aliases.find((a) => a.code === '甲生' && !a.variant);
+    t = restore && main ? t.split('甲生').join(main.real) : t.replace(/甲生/g, '該生');
     if (restore) {
       aliases.filter((a) => a.code !== '甲生' && !a.variant).forEach(({ real, code }) => {
         t = t.split(code).join(real);
@@ -534,7 +537,7 @@
       '### 撰寫規則',
       '- 一律使用繁體中文與臺灣慣用語，採書面語、第三人稱的教師紀錄視角。',
       '- 兩個部分各自只能是「一個段落」，不要條列、不要換行、不要另加標題，也不要在開頭寫姓名、日期、地點等欄位標籤。',
-      '- 主角學生一律稱為「該生」（資料中可能寫作「甲生」）；其他人物保留資料中的代稱（如乙生、丙生），不得自行編造姓名。',
+      '- 主角學生在資料中寫作「甲生」：每個段落第一次提到時寫「甲生」，之後一律稱「該生」；其他人物保留資料中的代稱（如乙生、丙生），不得自行編造姓名。',
       `- ${TARGET_RULE[c.target] || TARGET_RULE.student}`,
       '- 只根據老師提供的資訊撰寫，不得捏造未提及的事件、對話、診斷或結果，也不要推測學生的心理狀態或家庭背景；資訊不足時用概括的方式描述。',
       '- 不要自行補上資料裡沒有的細節，例如聯繫家長的管道（電話、聯絡簿、面談）、時間、次數、地點或在場人員。',
@@ -727,6 +730,27 @@
     if (getApiKey()) return true;
     openSettings(`先設定 Gemini API 金鑰；或關掉這個視窗，改用「${altHint}」。`);
     return false;
+  }
+
+  // 切換「顯示真實姓名／全部用代號」：把目前結果直接換過去，不必重新產生
+  function applyNameModeToOutput() {
+    const form = readForm();
+    const aliases = buildAliases({ ...form, event: [form.event, $('#keyPoints').value, $('#contact').value].join('\n') });
+    const main = aliases.find((a) => a.code === '甲生' && !a.variant);
+    ['#keyPoints', '#contact'].forEach((sel) => {
+      const ta = $(sel);
+      if (!ta.value.trim()) return;
+      let t = deidentify(ta.value, aliases); // 真名 → 代號
+      if (form.restoreNames) {
+        if (main && !t.includes('甲生')) t = t.replace('該生', '甲生'); // 第一次提到改回名字
+        t = postProcess(t, aliases, true);
+      } else {
+        t = postProcess(t, aliases, false);
+      }
+      ta.value = t;
+    });
+    updateCounts();
+    saveDraft();
   }
 
   // ---------- 逐步引導：選完自動帶到下一步、產生後自動跳到結果 ----------
@@ -940,7 +964,7 @@
       return;
     }
     const aliases = lastChatAliases.length ? lastChatAliases : buildAliases(readForm());
-    const restore = $('#restoreNames').checked;
+    const restore = readForm().restoreNames;
     rememberForUndo();
     $('#keyPoints').value = postProcess(r.key_points, aliases, restore);
     $('#contact').value = postProcess(r.contact, aliases, restore);
@@ -959,7 +983,7 @@
       seats: {},
       active: null,
       results: {},
-      common: { date: todayStr(), grade: '', target: 'student', method: '個別晤談', length: 'short', tone: 'neutral' },
+      common: { date: todayStr(), grade: '', target: 'student', method: '個別晤談', length: 'short', tone: 'neutral', nameMode: 'real' },
     };
   }
   function loadBatch() {
@@ -1014,6 +1038,7 @@
     $('#bMethod').value = c.method || '個別晤談';
     $$('input[name=bLength]').forEach((r) => { r.checked = r.value === (c.length || 'short'); });
     $$('input[name=bTone]').forEach((r) => { r.checked = r.value === (c.tone || 'neutral'); });
+    $$('input[name=bNameMode]').forEach((r) => { r.checked = r.value === (c.nameMode || 'real'); });
   }
   function readBatchCommon() {
     batch.common = {
@@ -1023,6 +1048,7 @@
       method: $('#bMethod').value,
       length: ($('input[name=bLength]:checked') || {}).value || 'short',
       tone: ($('input[name=bTone]:checked') || {}).value || 'neutral',
+      nameMode: ($('input[name=bNameMode]:checked') || {}).value || 'real',
     };
     saveBatchSoon();
   }
@@ -1116,7 +1142,8 @@
           const r = await callGemini(system, user, {
             onRetry: (n) => setBatchProgress(done, todo.length, `${k} 號：伺服器忙碌，第 ${n} 次重試…`),
           });
-          batch.results[k] = { keyPoints: postProcess(r.key_points, aliases, false), contact: postProcess(r.contact, aliases, false) };
+          const show = batch.common.nameMode !== 'code';
+          batch.results[k] = { keyPoints: postProcess(r.key_points, aliases, show), contact: postProcess(r.contact, aliases, show) };
         } catch (e) {
           failed += 1;
           batch.results[k] = { keyPoints: '', contact: '', error: friendlyError(e) };
@@ -1220,7 +1247,8 @@
       form: {
         studentName: seatLabel(k), otherNames: '', grade: c.grade, date: c.date, target: c.target, method: c.method,
         location: '', categories: c.categories, details: c.details, actions: c.actions,
-        event: c.event, handling: '', response: '', length: c.length, tone: c.tone, restoreNames: false,
+        event: c.event, handling: '', response: '', length: c.length, tone: c.tone,
+        nameMode: batch.common.nameMode || 'real', restoreNames: batch.common.nameMode !== 'code',
       },
       keyPoints: r.keyPoints,
       contact: r.contact,
@@ -1322,7 +1350,9 @@
       const k = String(Number(parts[i]));
       const r = parsePlain(parts[i + 1]);
       if (!r.key_points && !r.contact) continue;
-      batch.results[k] = { keyPoints: postProcess(r.key_points, [], false), contact: postProcess(r.contact, [], false) };
+      const show = batch.common.nameMode !== 'code';
+      const aliases = buildAliases({ studentName: rosterName(k), otherNames: '', event: parts[i + 1], handling: '', response: '' });
+      batch.results[k] = { keyPoints: postProcess(r.key_points, aliases, show), contact: postProcess(r.contact, aliases, show) };
       if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
       n += 1;
     }
@@ -1914,6 +1944,7 @@
     $('#method').addEventListener('change', () => { touchedSteps.add(2); guideTo(fieldOf('#location')); });
     $('#location').addEventListener('change', () => { touchedSteps.add(2); goStep(3); });
     $$('input[name=length]').forEach((r) => r.addEventListener('change', () => { touchedSteps.add(5); guideTo($('input[name=tone]').closest('.opt-row')); }));
+    $$('input[name=nameMode]').forEach((r) => r.addEventListener('change', () => { touchedSteps.add(5); applyNameModeToOutput(); }));
     $$('input[name=tone]').forEach((r) => r.addEventListener('change', () => {
       touchedSteps.add(5);
       guideTo($('#viewSingle .actions'), { highlight: false });
@@ -1970,7 +2001,7 @@
       if (s) { s.note = $('#bNote').value; saveBatchSoon(); }
     });
     ['#bDate', '#bGrade', '#bTarget', '#bMethod'].forEach((s) => $(s).addEventListener('change', readBatchCommon));
-    $$('input[name=bLength], input[name=bTone]').forEach((r) => r.addEventListener('change', readBatchCommon));
+    $$('input[name=bLength], input[name=bTone], input[name=bNameMode]').forEach((r) => r.addEventListener('change', readBatchCommon));
     $('#btnBatchGenerate').addEventListener('click', batchGenerate);
     $('#btnBatchCopyPrompt').addEventListener('click', batchCopyPrompt);
     $('#btnBatchParse').addEventListener('click', batchParse);

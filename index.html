@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-2">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-2">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-2">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.21-1">
-  <script src="sw-register.js?v=2026.10.21-1" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.21-2">
+  <script src="sw-register.js?v=2026.10.21-2" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -80,7 +80,7 @@
           <button type="button" data-step="6"><span class="dot">6</span><span class="lbl">結果</span></button>
         </nav>
 
-        <p class="privacy-note">🔒 學生姓名只留在你的電腦；送給 AI 前會自動換成「甲生、乙生」代號，電話與身分證字號也會遮蔽。</p>
+        <p class="privacy-note">🔒 送給 AI 前，學生姓名會自動換成「甲生、乙生」代號，電話與身分證字號也會遮蔽；AI 寫好後再在你的電腦上換回真實姓名（可在步驟 5 改成全部用代號）。</p>
 
         <h3 class="step-head first" id="step1"><span class="step-no">1</span>學生資料</h3>
         <div class="grid-3">
@@ -202,10 +202,14 @@
                 <label><input type="radio" name="tone" value="warm"><span>溫暖正向</span></label>
               </div>
             </div>
-            <label class="check">
-              <input type="checkbox" id="restoreNames">
-              <span>結果中的同學代號（乙生、丙生…）在本機還原成真實姓名</span>
-            </label>
+            <div class="opt-row">
+              <span class="opt-name">姓名</span>
+              <div class="seg small">
+                <label><input type="radio" name="nameMode" value="real" checked><span>顯示真實姓名</span></label>
+                <label><input type="radio" name="nameMode" value="code"><span>全部用代號</span></label>
+              </div>
+            </div>
+            <p class="name-hint">送給 AI 的一律是代號；選「顯示真實姓名」時，AI 寫好後才在你的電腦上換回學生與同學的名字。</p>
           </div>
         </details>
 
@@ -344,6 +348,13 @@
             <div class="seg small">
               <label><input type="radio" name="bTone" value="neutral" checked><span>客觀中性</span></label>
               <label><input type="radio" name="bTone" value="warm"><span>溫暖正向</span></label>
+            </div>
+          </div>
+          <div class="opt-row">
+            <span class="opt-name">姓名</span>
+            <div class="seg small">
+              <label><input type="radio" name="bNameMode" value="real" checked><span>顯示名冊姓名</span></label>
+              <label><input type="radio" name="bNameMode" value="code"><span>全部用代號</span></label>
             </div>
           </div>
         </section>
@@ -614,6 +625,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.21-1"></script>
+  <script src="app.js?v=2026.10.21-2"></script>
 </body>
 </html>
