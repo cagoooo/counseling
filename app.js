@@ -365,6 +365,7 @@
     el.classList.toggle('over', c.over);
   }
   function updateCounts() {
+    if (document.activeElement && ['keyPoints', 'contact'].includes(document.activeElement.id)) $('#demoNote').hidden = true;
     setCount($('#kpCount'), $('#keyPoints').value, 'keyPoints');
     setCount($('#ctCount'), $('#contact').value, 'contact');
     renderQc();
@@ -501,6 +502,7 @@
     $('#qcList').innerHTML = issues.map((it, i) => `<li class="qc-${it.kind}">
         <span>${escapeHtml(it.msg)}<small>（${escapeHtml(it.key === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel)}）</small></span>
         ${it.word ? `<button type="button" class="btn small" data-qc="${i}">選取這段</button>` : ''}
+        ${it.kind === 'length' ? `<button type="button" class="btn small primary" data-shorten="${it.key}">✂️ 精簡到 ${fieldMax(it.key)} 字內</button>` : ''}
       </li>`).join('');
     panel._issues = issues;
   }
@@ -514,8 +516,10 @@
       { key: 'keyPoints', label: fmt.kpLabel, text: r.keyPoints },
       { key: 'contact', label: fmt.ctLabel, text: r.contact },
     ], source);
+    const shortenBtns = issues.filter((it) => it.kind === 'length')
+      .map((it) => `<button type="button" class="btn small primary" data-bact="shorten" data-field="${it.key}">✂️ 精簡${escapeHtml(it.key === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel)}到 ${fieldMax(it.key)} 字內</button>`).join('');
     return issues.length
-      ? `<div class="qc-mini has-issues">⚠️ 建議確認：${issues.map((it) => escapeHtml(it.msg)).join('；')}</div>`
+      ? `<div class="qc-mini has-issues">⚠️ 建議確認：${issues.map((it) => escapeHtml(it.msg)).join('；')}${shortenBtns ? `<div class="qc-actions">${shortenBtns}</div>` : ''}</div>`
       : '<div class="qc-mini">🔍 自動檢查：沒有發現常見問題 ✓</div>';
   }
 
@@ -525,7 +529,7 @@
     const tone = c.tone === 'warm'
       ? '語氣溫暖、正向、具同理心，肯定學生的努力，但仍維持專業書面用語。'
       : '語氣客觀、中性、專業，避免情緒性字眼。';
-    const lenText = (max, d) => (max ? `不超過 ${max} 字（含標點），這是校務系統的欄位上限，務必遵守` : `約 ${d}`);
+    const lenText = (max, d) => (max ? `不超過 ${aiLimit(max, c.lenMargin)} 字（含標點），這是校務系統的欄位上限，務必遵守` : `約 ${d}`);
     const rules = [
       '### 角色',
       '你是一位經驗豐富的臺灣國小導師，熟悉學校「學生輔導資料紀錄表」的撰寫方式。你的任務是把老師口語、零散的描述或點選的標籤，整理成可以直接登錄到校務系統的正式輔導紀錄。',
@@ -585,7 +589,7 @@
       otherNames: [form.otherNames, prior && prior.form ? prior.form.otherNames : ''].filter(Boolean).join(','),
       extraText: prior ? `${prior.keyPoints}\n${prior.contact}` : '',
     });
-    const c = { ...form, target: effectiveTarget(form.target, form.actions), prior };
+    const c = { ...form, target: effectiveTarget(form.target, form.actions), prior, lenMargin: form.restoreNames ? nameMargin(aliases) : 0 };
     const system = systemRules(c);
     system.push('', '### 輸出格式', ...outputFormatLines(mode));
     const di = (s) => deidentify(s, aliases);
@@ -633,12 +637,25 @@
 
   // ---------- Gemini API ----------
   class ApiError extends Error {
-    constructor(status, message) { super(message); this.status = status; }
+    constructor(status, message, extra = {}) {
+      super(message);
+      this.status = status;
+      this.retryAfter = extra.retryAfter || 0; // Google 建議等待秒數
+      this.daily = !!extra.daily; // 每日額度用完（等一分鐘也沒用）
+    }
   }
   async function toApiError(res) {
     let msg = '';
-    try { msg = (await res.json())?.error?.message || ''; } catch { /* 忽略 */ }
-    return new ApiError(res.status, msg);
+    const extra = {};
+    try {
+      const err = (await res.json())?.error || {};
+      msg = err.message || '';
+      const details = JSON.stringify(err.details || []);
+      const m = details.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+      extra.retryAfter = m ? Math.ceil(Number(m[1])) : 0;
+      extra.daily = /PerDay/i.test(details) || /per day/i.test(msg);
+    } catch { /* 忽略 */ }
+    return new ApiError(res.status, msg, extra);
   }
   function friendlyError(e) {
     if (e instanceof ApiError) {
@@ -647,7 +664,8 @@
       if (e.status === 400) return `請求格式有誤：${m.slice(0, 120)}`;
       if (e.status === 401 || e.status === 403) return '金鑰沒有權限或已被停用，請到 Google AI Studio 確認。';
       if (e.status === 404) return '這個模型已停用或不存在，請到「⚙️ 設定」按「重新抓取」換一個模型。';
-      if (e.status === 429) return '使用量超過額度（免費方案每分鐘、每天有上限），請稍等一下再試。';
+      if (e.status === 429 && e.daily) return '今天的免費額度已經用完了（每天有上限），請明天再試，或到「⚙️ 設定」換一把金鑰。';
+      if (e.status === 429) return `使用得太頻繁，超過每分鐘的免費額度，請 ${e.retryAfter || 60} 秒後再試。`;
       if (e.status >= 500) return 'Google 伺服器暫時忙碌，請稍後再試。';
       return `發生錯誤（${e.status}）：${m.slice(0, 120)}`;
     }
@@ -704,7 +722,12 @@
         body,
       });
       if (res.ok) break;
-      if (![429, 500, 503].includes(res.status) || attempt >= RETRY_DELAYS.length) throw await toApiError(res);
+      if (res.status === 429) {
+        const err = await toApiError(res);
+        if (err.daily || err.retryAfter > 10 || attempt >= RETRY_DELAYS.length) throw err; // 要等很久的交給呼叫端倒數
+      } else if (![500, 503].includes(res.status) || attempt >= RETRY_DELAYS.length) {
+        throw await toApiError(res);
+      }
       if (onRetry) onRetry(attempt + 1, RETRY_DELAYS[attempt]);
       await sleep(RETRY_DELAYS[attempt]);
     }
@@ -728,7 +751,7 @@
 
   function requireKey(altHint) {
     if (getApiKey()) return true;
-    openSettings(`先設定 Gemini API 金鑰；或關掉這個視窗，改用「${altHint}」。`);
+    openSettings(`先設定 Gemini API 金鑰；或關掉這個視窗，改用「${altHint}」，也可以按「👀 先看範例」看看成果。`);
     return false;
   }
 
@@ -751,6 +774,34 @@
     });
     updateCounts();
     saveDraft();
+  }
+
+  // ---------- 先看範例（不需要金鑰的示範） ----------
+  const DEMO = {
+    form: {
+      studentName: '林小安', otherNames: '陳大寶', grade: '三年級', target: 'student', method: '個別晤談', location: '原班教室',
+      categories: ['人際關係', '生活常規'], details: ['同儕衝突', '肢體碰撞'], actions: ['傾聽與同理', '引導換位思考'],
+      event: '下課時小安和大寶在走廊搶球，一生氣推了大寶一把，大寶跌倒膝蓋擦傷。小安一開始覺得是大寶先搶球，不覺得自己有錯。',
+      handling: '先確認大寶到保健室處理，再分別聽兩人說明經過。引導小安說出當下生氣的感受，討論推人可能造成的危險，一起想下次生氣時可以先深呼吸、用說的或請老師幫忙。',
+      response: '小安冷靜後承認推人不對，主動向大寶道歉，說下次會先用說的。',
+    },
+    keyPoints: '林小安於下課時因搶球與陳大寶發生推擠，致對方跌倒擦傷，經教師個別晤談引導後，已主動向對方道歉。',
+    contact: '林小安於下課時與陳大寶在走廊搶球，一時情緒激動推了對方一把，致陳大寶跌倒膝蓋擦傷，該生起初認為是對方先搶球而未察覺自身不當。教師先確認陳大寶至保健室處理，再分別聆聽兩人說明經過，引導該生說出當下生氣的感受，並討論推人可能造成的危險，共同想出下次生氣時可先深呼吸、以口語表達或請老師協助等做法。該生冷靜後承認推人不對，主動向陳大寶道歉，並表示下次會先用說的。教師後續將持續觀察該生的情緒調節與同儕互動情形。',
+  };
+  function showDemo() {
+    const hasInput = ['#event', '#handling', '#response', '#keyPoints', '#contact'].some((s) => $(s).value.trim());
+    if (hasInput && !confirm('要用範例內容取代目前填寫的內容嗎？（紀錄本不受影響）')) return;
+    rememberForUndo();
+    const cur = readForm();
+    fillForm({ ...DEMO.form, date: todayStr(), length: cur.length, tone: cur.tone, nameMode: cur.nameMode });
+    $('#keyPoints').value = DEMO.keyPoints;
+    $('#contact').value = DEMO.contact;
+    if (!readForm().restoreNames) applyNameModeToOutput();
+    updateCounts();
+    saveDraft();
+    $('#demoNote').hidden = false;
+    setStatus('👀 示範結果', 'ok');
+    guideTo($('#outputCard'), { block: 'start', force: true });
   }
 
   // ---------- 逐步引導：選完自動帶到下一步、產生後自動跳到結果 ----------
@@ -857,6 +908,8 @@
     }
     if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
     const { system, user, aliases } = buildMessages(form, 'json');
+    $('#demoNote').hidden = true;
+    let autoFit = [];
     setBusy(true);
     setStatus('AI 整理中…');
     // 按下就先帶到結果區（看得到「AI 正在撰寫」），所有螢幕寬度都要
@@ -875,6 +928,7 @@
       touchedSteps.add(5);
       guideTo($('#outputCard'), { block: 'start' });
       renderStepper();
+      autoFit = ['keyPoints', 'contact'].filter((f) => countText($(`#${f}`).value, f).over);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setModel('');
       setStatus('產生失敗', 'err');
@@ -882,9 +936,34 @@
     } finally {
       setBusy(false);
     }
+    for (const f of autoFit) {
+      await rewrite('shorten', { field: f, auto: true });
+    }
   }
 
-  async function rewrite(kind) {
+  // AI 看到的是「甲生」這類 2 字代號，換回真名（如 3 字）會變長，字數上限要先扣掉這段
+  const nameMargin = (aliases) => aliases.filter((a) => !a.variant).reduce((sum, a) => sum + Math.max(0, a.real.length - a.code.length) * 2, 0);
+  const aiLimit = (max, margin) => (max ? Math.max(10, max - (margin || 0)) : 0);
+
+  function shortenUser(field, kp, ct, { margin = 0, lastCount = 0 } = {}) {
+    const label = field === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel;
+    const other = field === 'keyPoints' ? fmt.ctLabel : fmt.kpLabel;
+    const max = aiLimit(fieldMax(field), margin);
+    const lines = [
+      '### 目前的輔導紀錄',
+      `${fmt.kpLabel}：${kp}`,
+      `${fmt.ctLabel}：${ct}`,
+      '',
+      '### 改寫指示',
+      `把「${label}」精簡到 ${max} 字以內（含標點符號；目標約 ${Math.max(8, Math.floor(max * 0.8))} 字），保留最關鍵的事實、教師的處理與後續做法，仍是一個完整段落。`,
+      `「${other}」照原文輸出，一個字都不要改。`,
+      '維持上述所有撰寫規則，只輸出結果。',
+    ];
+    if (lastCount) lines.push(`注意：上一版「${label}」是 ${lastCount} 字，仍超過 ${max} 字的上限，這次請大幅刪減，只留最核心的內容。`);
+    return lines.join('\n');
+  }
+
+  async function rewrite(kind, { field, auto = false } = {}) {
     if (busy) return;
     const kp0 = $('#keyPoints').value.trim();
     const ct0 = $('#contact').value.trim();
@@ -894,7 +973,8 @@
     const aliases = buildAliases(form);
     const c = { ...form, target: effectiveTarget(form.target, form.actions) };
     const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
-    const user = [
+    const shorten = kind === 'shorten';
+    const user = shorten ? '' : [
       '### 目前的輔導紀錄',
       `${fmt.kpLabel}：${deidentify(kp0, aliases)}`,
       `${fmt.ctLabel}：${deidentify(ct0, aliases)}`,
@@ -903,12 +983,37 @@
       REWRITE_RULE[kind],
       '維持兩段式與上述所有撰寫規則，只輸出改寫後的結果。',
     ].join('\n');
-    setBusy(true, `AI 正在改寫成「${REWRITE_LABEL[kind]}」版本…`);
-    setStatus('改寫中…');
+    const label = shorten ? `精簡到 ${fieldMax(field)} 字內` : `改寫成「${REWRITE_LABEL[kind]}」`;
+    setBusy(true, auto ? `超過學校字數上限，正在自動精簡「${field === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel}」…` : `AI 正在${label}…`);
+    setStatus(`${shorten ? '精簡' : '改寫'}中…`);
     try {
       await ensureModel();
-      const r = await callGemini(system, user, { onRetry: (n) => setStatus(`伺服器忙碌，第 ${n} 次重試…`) });
       rememberForUndo();
+      if (shorten) {
+        // 精簡一次還超過，就再精簡一次（最多兩次）
+        let text = '';
+        const margin = form.restoreNames ? nameMargin(aliases) : 0;
+        let lastCount = 0;
+        for (let i = 0; i < 3; i += 1) {
+          const cur = { keyPoints: $('#keyPoints').value, contact: $('#contact').value };
+          const u = shortenUser(field, deidentify(cur.keyPoints, aliases), deidentify(cur.contact, aliases), { margin, lastCount });
+          const r = await callGemini(system, u, { onRetry: (n) => setStatus(`伺服器忙碌，第 ${n} 次重試…`) });
+          const raw = field === 'keyPoints' ? r.key_points : r.contact;
+          text = postProcess(raw, aliases, form.restoreNames);
+          $(`#${field}`).value = text;
+          if (!countText(text, field).over) break;
+          lastCount = countChars(toOneParagraph(raw));
+          setStatus(`還超過上限，第 ${i + 2} 次精簡中…`);
+        }
+        updateCounts();
+        saveDraft();
+        const c = countText(text, field);
+        const who = field === 'keyPoints' ? fmt.kpLabel : fmt.ctLabel;
+        setStatus(c.over ? `「${who}」已精簡，但仍${c.label}，請手動再刪一點`
+          : `${auto ? '已自動' : '已'}把「${who}」精簡到 ${c.label} ✓ 不滿意可按復原`, c.over ? 'err' : 'ok');
+        return;
+      }
+      const r = await callGemini(system, user, { onRetry: (n) => setStatus(`伺服器忙碌，第 ${n} 次重試…`) });
       $('#keyPoints').value = postProcess(r.key_points, aliases, form.restoreNames);
       $('#contact').value = postProcess(r.contact, aliases, form.restoreNames);
       updateCounts();
@@ -977,6 +1082,16 @@
   // ---------- 批次補登 ----------
   let batch = loadBatch();
   let batchBusy = false;
+  let batchStop = false;
+  // 倒數等待；按「停止」會提早結束並回傳 false
+  async function countdown(sec, onTick) {
+    for (let s = sec; s > 0; s -= 1) {
+      if (batchStop) return false;
+      onTick(s);
+      await sleep(1000);
+    }
+    return !batchStop;
+  }
 
   function newBatch() {
     return {
@@ -1125,6 +1240,8 @@
     if (!requireKey('複製提示詞')) return;
 
     batchBusy = true;
+    batchStop = false;
+    $('#btnBatchStop').hidden = false;
     $('#btnBatchGenerate').disabled = true;
     $('#btnBatchGenerate').classList.add('loading');
     guideTo($('.batch-results'), { block: 'start', force: true, highlight: false });
@@ -1132,18 +1249,40 @@
     let failed = 0;
     try {
       const model = await ensureModel();
+      let stopped = false;
       for (const k of todo) {
+        if (batchStop) { stopped = true; break; }
         setBatchProgress(done, todo.length, `正在產生 ${k} 號（${done + 1} / ${todo.length}）…`);
-        const c = seatCase(k);
-        const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
         const aliases = seatAliases(k);
+        const c = { ...seatCase(k), lenMargin: batch.common.nameMode !== 'code' ? nameMargin(aliases) : 0 };
+        const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
         const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, aliases))].join('\n');
         try {
-          const r = await callGemini(system, user, {
-            onRetry: (n) => setBatchProgress(done, todo.length, `${k} 號：伺服器忙碌，第 ${n} 次重試…`),
-          });
+          let r;
+          for (let wait = 0; ; wait += 1) {
+            try {
+              r = await callGemini(system, user, {
+                onRetry: (n) => setBatchProgress(done, todo.length, `${k} 號：伺服器忙碌，第 ${n} 次重試…`),
+              });
+              break;
+            } catch (e) {
+              // 每分鐘額度用完：倒數後自動繼續同一位（最多等 3 次）；每日額度用完就停
+              if (!(e instanceof ApiError && e.status === 429 && !e.daily && wait < 3)) throw e;
+              const sec = Math.min(90, Math.max(10, e.retryAfter || 60));
+              const ok = await countdown(sec, (s) => setBatchProgress(done, todo.length, `⏳ 已達每分鐘免費額度，${s} 秒後自動繼續 ${seatLabel(k)}（可按「停止」）`));
+              if (!ok) { stopped = true; break; }
+            }
+          }
+          if (stopped) break;
           const show = batch.common.nameMode !== 'code';
           batch.results[k] = { keyPoints: postProcess(r.key_points, aliases, show), contact: postProcess(r.contact, aliases, show) };
+          // 超過學校字數上限就自動精簡（只有超過時才多花一次額度）
+          for (const f of ['keyPoints', 'contact']) {
+            if (countText(batch.results[k][f], f).over) {
+              setBatchProgress(done, todo.length, `${seatLabel(k)}：超過學校字數上限，自動精簡中…`);
+              await shortenSeatField(k, f);
+            }
+          }
         } catch (e) {
           failed += 1;
           batch.results[k] = { keyPoints: '', contact: '', error: friendlyError(e) };
@@ -1159,15 +1298,59 @@
         saveBatchSoon();
         await sleep(400);
       }
-      setBatchProgress(done, todo.length, failed ? `完成 ${done - failed} 位，${failed} 位失敗（可按「重寫」再試）` : `✓ 全部完成（${done} 位，${model}）`);
-      if (!failed) toast('批次產生完成 ✓');
+      if (stopped) {
+        setBatchProgress(done, todo.length, `已停止：完成 ${done - failed} 位，剩下的再按「開始批次產生」會接著做`);
+      } else {
+        setBatchProgress(done, todo.length, failed ? `完成 ${done - failed} 位，${failed} 位失敗（可按「重寫」再試）` : `✓ 全部完成（${done} 位，${model}）`);
+        if (!failed) toast('批次產生完成 ✓');
+      }
     } catch (e) {
       setBatchProgress(done, todo.length, '產生失敗');
       toast(friendlyError(e), 'error', 6000);
     } finally {
       batchBusy = false;
+      batchStop = false;
+      $('#btnBatchStop').hidden = true;
       $('#btnBatchGenerate').disabled = false;
       $('#btnBatchGenerate').classList.remove('loading');
+      renderBatchResults();
+    }
+  }
+
+  async function shortenSeatField(k, field) {
+    const r = batch.results[k];
+    if (!batch.seats[k]) batch.seats[k] = { details: [], actions: [], note: '' };
+    const c = seatCase(k);
+    const aliases = buildAliases({ studentName: rosterName(k), otherNames: '', event: [batch.seats[k]?.note || '', r.keyPoints, r.contact].join('\n'), handling: '', response: '' });
+    const system = [...systemRules(c), '', '### 輸出格式', ...outputFormatLines('json')].join('\n');
+    const show = batch.common.nameMode !== 'code';
+    const margin = show ? nameMargin(aliases) : 0;
+    let lastCount = 0;
+    for (let i = 0; i < 3; i += 1) {
+      const out = await callGemini(system, shortenUser(field, deidentify(r.keyPoints, aliases), deidentify(r.contact, aliases), { margin, lastCount }));
+      const raw = field === 'keyPoints' ? out.key_points : out.contact;
+      r[field] = postProcess(raw, aliases, show);
+      if (!countText(r[field], field).over) break;
+      lastCount = countChars(toOneParagraph(raw));
+    }
+  }
+
+  async function batchShorten(k, field, btn) {
+    if (batchBusy) return;
+    if (!requireKey('複製提示詞')) return;
+    const r = batch.results[k];
+    batchBusy = true;
+    btn.classList.add('loading');
+    btn.disabled = true;
+    try {
+      await ensureModel();
+      await shortenSeatField(k, field);
+      saveBatchSoon();
+      toast(`已把 ${seatLabel(k)} 精簡到 ${countText(r[field], field).label}`);
+    } catch (e) {
+      toast(friendlyError(e), 'error', 6000);
+    } finally {
+      batchBusy = false;
       renderBatchResults();
     }
   }
@@ -1260,6 +1443,7 @@
     if (!btn) return;
     const k = btn.closest('.batch-card').dataset.seat;
     const r = batch.results[k];
+    if (btn.dataset.bact === 'shorten') { batchShorten(k, btn.dataset.field, btn); return; }
     if (btn.dataset.bact === 'copyKp' || btn.dataset.bact === 'copyCt') {
       const isKp = btn.dataset.bact === 'copyKp';
       copyText(isKp ? r.keyPoints : r.contact).then((ok) => toast(ok ? `已複製 ${seatLabel(k)} 的${isKp ? fmt.kpLabel : fmt.ctLabel} ✓` : '複製失敗', ok ? '' : 'error'));
@@ -1925,6 +2109,8 @@
     $$('[data-rewrite]').forEach((b) => b.addEventListener('click', () => rewrite(b.dataset.rewrite)));
     $('#btnUndo').addEventListener('click', undo);
     $('#qcList').addEventListener('click', (e) => {
+      const s = e.target.closest('[data-shorten]');
+      if (s) { rewrite('shorten', { field: s.dataset.shorten }); return; }
       const b = e.target.closest('[data-qc]');
       const it = b && ($('#qcPanel')._issues || [])[Number(b.dataset.qc)];
       if (!it) return;
@@ -1935,6 +2121,14 @@
       ta.setSelectionRange(i, i + it.word.length);
     });
     $('#btnCopyPrompt').addEventListener('click', copyPrompt);
+    $('#btnDemo').addEventListener('click', showDemo);
+    $('#btnDemoKey').addEventListener('click', () => openSettings());
+    $('#btnHelpDemo').addEventListener('click', () => { $('#helpDialog').close(); switchView('single'); showDemo(); });
+    $('#btnBatchStop').addEventListener('click', () => {
+      batchStop = true;
+      $('#btnBatchStop').hidden = true;
+      setBatchProgress(0, 0, '正在停止…（目前這一位做完就停）');
+    });
 
     // 逐步引導
     $$('#stepper button').forEach((b) => b.addEventListener('click', () => goStep(Number(b.dataset.step))));

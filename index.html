@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-3">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-3">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-3">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.21-3">
-  <script src="sw-register.js?v=2026.10.21-3" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.21-6">
+  <script src="sw-register.js?v=2026.10.21-6" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -217,6 +217,7 @@
         <div class="actions">
           <button type="button" class="btn primary big" id="btnGenerate">✨ AI 整理成輔導紀錄</button>
           <button type="button" class="btn" id="btnCopyPrompt" title="不需要 API 金鑰，貼到 Gemini 網頁版使用">📋 不用金鑰：複製提示詞到 Gemini</button>
+          <button type="button" class="btn ghost" id="btnDemo" title="不需要金鑰，直接看一份完整的示範結果">👀 先看範例</button>
         </div>
 
         <details class="peek">
@@ -230,6 +231,11 @@
         <div class="card-head">
           <h2 id="outputTitle"><span class="step">2</span>輔導紀錄結果</h2>
           <span class="status" id="status" role="status"></span>
+        </div>
+
+        <div class="demo-note" id="demoNote" role="status" hidden>
+          👀 <strong>這是示範結果</strong>（沒有使用 AI）。設定金鑰後按「✨ AI 整理成輔導紀錄」，就會依你寫的內容產生。
+          <button type="button" class="link-btn" id="btnDemoKey">設定金鑰</button>
         </div>
 
         <div class="result-block">
@@ -389,6 +395,7 @@
         </div>
         <div class="batch-buttons">
           <button type="button" class="btn" id="btnBatchCopyPrompt" title="不需要 API 金鑰：複製整批的提示詞，貼到 Gemini 網頁版使用">📋 複製提示詞</button>
+          <button type="button" class="btn danger-ghost" id="btnBatchStop" hidden>⏹ 停止</button>
           <button type="button" class="btn primary big" id="btnBatchGenerate">▶️ 開始批次產生</button>
         </div>
       </div>
@@ -581,6 +588,7 @@
         <li><strong>給建議</strong>：右下角的「給建議」按鈕會開啟阿凱老師的許願池，歡迎留下使用心得或想要的新功能。</li>
       </ul>
       <div class="modal-actions">
+        <button type="button" class="btn" id="btnHelpDemo">👀 先看範例</button>
         <button type="button" class="btn" id="btnHelpKey">⚙️ 設定 AI 金鑰</button>
         <button type="button" class="btn primary" data-close>開始使用</button>
       </div>
@@ -627,6 +635,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.21-3"></script>
+  <script src="app.js?v=2026.10.21-6"></script>
 </body>
 </html>

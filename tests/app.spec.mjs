@@ -582,3 +582,143 @@ test('寬螢幕：往下填寫時結果卡片黏在畫面上；手機版不黏',
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('#outputCard')).position)).not.toBe('sticky');
 });
+
+// ---------------------------------------------------------------------------
+test('先看範例：沒有金鑰也能看到完整示範結果，可切換代號，修改後提示消失', async ({ page }) => {
+  await ready(page, { key: false });
+  await page.goto('/');
+  await page.click('#btnDemo');
+  await expect(page.locator('#demoNote')).toBeVisible();
+  await expect(page.locator('#studentName')).toHaveValue('林小安');
+  await expect(page.locator('#keyPoints')).toHaveValue(/^林小安於下課時/);
+  await expect(page.locator('#contact')).toHaveValue(/主動向陳大寶道歉/);
+  await expect(page.locator('#qcTitle')).toContainText('沒有發現常見問題');
+  await expect.poll(() => inView(page, '#outputCard')).toBe(true);
+  await page.locator('input[name=nameMode][value=code] + span').click();
+  await expect(page.locator('#keyPoints')).toHaveValue(/^該生於下課時因搶球與乙生/);
+  await page.locator('#contact').click();
+  await page.locator('#contact').press('End');
+  await page.locator('#contact').pressSequentially('。');
+  await expect(page.locator('#demoNote')).toBeHidden();
+  // 已有內容時會先確認
+  page.once('dialog', (d) => { expect(d.message()).toContain('範例'); d.dismiss(); });
+  await page.click('#btnDemo');
+  await expect(page.locator('#demoNote')).toBeHidden();
+  // 使用說明裡也有入口
+  await page.click('#btnHelp');
+  page.once('dialog', (d) => d.accept());
+  await page.click('#btnHelpDemo');
+  await expect(page.locator('#demoNote')).toBeVisible();
+});
+
+const RATE = (sec) => ({ status: 429, message: 'Resource has been exhausted (e.g. check quota).', details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: `${sec}s` }] });
+async function mockGeminiRaw(page, handler) {
+  let n = 0;
+  await page.route(API, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    n += 1;
+    const r = handler(n);
+    if (r.status) return route.fulfill({ status: r.status, headers: CORS, json: { error: { code: r.status, message: r.message, details: r.details || [] } } });
+    return route.fulfill({ headers: CORS, json: { candidates: [{ content: { parts: [{ text: JSON.stringify(r) }] } }] } });
+  });
+}
+
+test('批次：撞到每分鐘額度會倒數後自動繼續完成', async ({ page }) => {
+  test.setTimeout(60000);
+  await mockGeminiRaw(page, (n) => (n === 1 ? RATE(12) : DEFAULT_REPLY));
+  await ready(page);
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.click('.seat[data-seat="2"]');
+  await page.click('#batchTagLib [data-tag="遲到"]');
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('秒後自動繼續');
+  await expect(page.locator('#btnBatchStop')).toBeVisible();
+  await expect(page.locator('#batchProgressText')).toContainText('全部完成', { timeout: 25000 });
+  await expect(page.locator('#btnBatchStop')).toBeHidden();
+  await expect(page.locator('.batch-card[data-seat="2"] [data-field="contact"]')).not.toHaveValue('');
+});
+
+test('批次：倒數中可按停止；每日額度用完會直接停並說明', async ({ page }) => {
+  test.setTimeout(60000);
+  let mode = 'minute';
+  await mockGeminiRaw(page, () => (mode === 'minute' ? RATE(30)
+    : { status: 429, message: 'Quota exceeded', details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] }));
+  await ready(page);
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.click('.seat[data-seat="2"]');
+  await page.click('#batchTagLib [data-tag="遲到"]');
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('秒後自動繼續');
+  await page.click('#btnBatchStop');
+  await expect(page.locator('#batchProgressText')).toContainText('已停止', { timeout: 5000 });
+  await expect(page.locator('#btnBatchGenerate')).toBeEnabled();
+  mode = 'daily';
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#toast')).toContainText('今天的免費額度已經用完', { timeout: 10000 });
+});
+
+// 模擬：一般產生回長文；收到「精簡到」指示時回短文
+async function mockLongShort(page) {
+  const calls = [];
+  await page.route(API, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    const user = req.postDataJSON().contents[0].parts[0].text;
+    calls.push(user);
+    const out = user.includes('精簡到')
+      ? { key_points: '甲生下課時與乙生搶球推擠。', contact: '這一欄就算被 AI 改了也不採用' }
+      : { key_points: '甲生下課時與乙生在走廊因搶球發生嚴重推擠衝突事件。', contact: '原本的聯繫內容不應被改動。' };
+    return route.fulfill({ headers: CORS, json: { candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] } });
+  });
+  return calls;
+}
+
+test('字數上限：產生後若超過上限會自動精簡，只改超過的那一欄', async ({ page }) => {
+  const calls = await mockLongShort(page);
+  await ready(page, { storage: { 'crh.format': { kpLabel: '輔導內容重點', kpMax: 20, ctLabel: '聯繫內容', ctMax: 0 } } });
+  await page.goto('/');
+  await page.fill('#studentName', '王小明');
+  await page.fill('#event', '下課推人');
+  await page.click('#btnGenerate');
+  await expect(page.locator('#status')).toContainText('已自動把「輔導內容重點」精簡到', { timeout: 15000 });
+  await expect(page.locator('#kpCount')).not.toHaveClass(/over/);
+  await expect(page.locator('#contact')).toHaveValue('原本的聯繫內容不應被改動。');
+  expect(calls).toHaveLength(2);
+  // 名字換回真名會變長：給 AI 的上限要先扣掉（王小明 3 字 vs 甲生 2 字）
+  expect(calls[1]).toMatch(/精簡到 1\d 字以內/);
+});
+
+test('字數上限：事後才設定上限時，可一鍵「精簡到上限內」並復原', async ({ page }) => {
+  await mockLongShort(page);
+  await ready(page);
+  await page.goto('/');
+  await page.fill('#event', '下課推人');
+  await generate(page);
+  await expect(page.locator('#kpCount')).not.toHaveClass(/over/); // 還沒設上限
+  await page.click('#btnSettings');
+  await page.fill('#fmtKpMax', '20');
+  await page.locator('#fmtKpMax').press('Tab');
+  await page.click('#settingsDialog [data-close]');
+  await expect(page.locator('#kpCount')).toHaveClass(/over/);
+  await page.click('[data-shorten="keyPoints"]');
+  await expect(page.locator('#status')).toContainText('精簡到');
+  await expect(page.locator('#kpCount')).not.toHaveClass(/over/);
+  await expect(page.locator('#contact')).toHaveValue('原本的聯繫內容不應被改動。');
+  await page.click('#btnUndo');
+  await expect(page.locator('#kpCount')).toHaveClass(/over/);
+});
+
+test('字數上限（批次）：產生後超過上限自動精簡', async ({ page }) => {
+  await mockLongShort(page);
+  await ready(page, { storage: { 'crh.format': { kpLabel: '輔導內容重點', kpMax: 20, ctLabel: '聯繫內容', ctMax: 0 } } });
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.click('.seat[data-seat="2"]');
+  await page.click('#batchTagLib [data-tag="遲到"]');
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('全部完成', { timeout: 15000 });
+  await expect(page.locator('.batch-card[data-seat="2"] [data-count="keyPoints"]')).not.toHaveClass(/over/);
+});

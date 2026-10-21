@@ -699,3 +699,12 @@ a.footer-link { text-decoration: none; display: inline-flex; align-items: center
   /* 左欄捲到底（產生按鈕附近）時，右欄要有空間讓結果卡片繼續完整顯示，不被推上去 */
   #viewSingle { padding-bottom: min(42vh, 380px); }
 }
+
+/* ===== 先看範例、精簡按鈕、批次停止 ===== */
+.demo-note {
+  margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; font-size: var(--fs-sm);
+  background: #eef5fb; border: 1px solid #c9dcee; color: #234a6b;
+}
+.demo-note .link-btn { color: #234a6b; font-weight: 700; }
+.qc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.qc-list li .btn.primary, .qc-actions .btn.primary { color: #fff; }
