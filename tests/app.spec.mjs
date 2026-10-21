@@ -457,3 +457,46 @@ test('逐步引導（手機批次）：點座號帶到勾選區，按開始產�
   await expect(page.locator('#batchProgressText')).toContainText('全部完成');
   await expect.poll(() => inView(page, '.batch-results')).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+const WISH = 'https://cagoooo.github.io/Akai/wish/';
+const overlaps = (page, a, b) => page.evaluate(([x, y]) => {
+  const r1 = document.querySelector(x).getBoundingClientRect();
+  const r2 = document.querySelector(y).getBoundingClientRect();
+  return !(r1.right <= r2.left || r2.right <= r1.left || r1.bottom <= r2.top || r2.bottom <= r1.top);
+}, [a, b]);
+
+test('給建議按鈕：右下角、連到許願池、另開分頁，頁尾與說明也有入口', async ({ page }) => {
+  await ready(page);
+  await page.goto('/');
+  const fab = page.locator('#feedbackFab');
+  await expect(fab).toBeVisible();
+  await expect(fab).toHaveAttribute('href', WISH);
+  await expect(fab).toHaveAttribute('target', '_blank');
+  await expect(fab).toHaveAttribute('rel', /noopener/);
+  await page.waitForTimeout(1800); // 等進場動畫結束
+  const box = await fab.boundingBox();
+  expect(box.x + box.width).toBeGreaterThan(1440 - 60); // 扣掉捲軸與邊距
+  expect(box.y + box.height).toBeGreaterThan(900 - 60);
+  await expect(page.locator(`.footer-link[href="${WISH}"]`)).toHaveCount(1);
+  await expect(page.locator('#helpDialog .help-tips')).toContainText('給建議');
+  // 頁尾連結按鈕仍然正常（沒被新加的連結弄壞）
+  await page.click('.footer-link[data-footer="btnHelp"]');
+  await expect(page.locator('#helpDialog')).toBeVisible();
+});
+
+for (const vp of [{ name: '電腦', width: 1440, height: 900 }, { name: '手機', width: 375, height: 812 }]) {
+  test(`給建議按鈕（${vp.name}）：批次模式不擋住「開始批次產生」`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    await ready(page);
+    await page.goto('/');
+    await page.click('#tabBatch');
+    await page.waitForTimeout(300);
+    expect(await overlaps(page, '#feedbackFab', '#btnBatchGenerate')).toBe(false);
+    expect(await overlaps(page, '#feedbackFab', '#btnBatchCopyPrompt')).toBe(false);
+    await page.click('#tabSingle');
+    await page.waitForTimeout(300);
+    const box = await page.locator('#feedbackFab').boundingBox();
+    expect(box.y + box.height).toBeGreaterThan(vp.height - 40); // 回到個別模式時按鈕降回底部
+  });
+}

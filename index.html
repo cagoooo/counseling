@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.20-15">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-1">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.20-15">
-  <script src="sw-register.js?v=2026.10.20-15" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.21-1">
+  <script src="sw-register.js?v=2026.10.21-1" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -418,6 +418,7 @@
         <button type="button" class="footer-link" data-footer="btnHelp">❓ 使用說明</button>
         <button type="button" class="footer-link" data-footer="btnHistory">📚 紀錄本與備份</button>
         <button type="button" class="footer-link" data-footer="btnSettings">⚙️ 設定</button>
+        <a class="footer-link" href="https://cagoooo.github.io/Akai/wish/" target="_blank" rel="noopener noreferrer">💌 給建議／許願池</a>
       </nav>
     </div>
     <div class="footer-bottom">
@@ -564,6 +565,7 @@
         <li><strong>學校格式</strong>：在「⚙️ 設定」改成你們學校的欄位名稱與字數上限。</li>
         <li><strong>記得備份</strong>：紀錄只存在這個瀏覽器，請定期到紀錄本「備份成檔案」。</li>
         <li><strong>共用電腦</strong>：在「⚙️ 設定」開啟「公用電腦模式」，關閉分頁就自動清除。</li>
+        <li><strong>給建議</strong>：右下角的「給建議」按鈕會開啟阿凱老師的許願池，歡迎留下使用心得或想要的新功能。</li>
       </ul>
       <div class="modal-actions">
         <button type="button" class="btn" id="btnHelpKey">⚙️ 設定 AI 金鑰</button>
@@ -592,9 +594,26 @@
     </div>
   </dialog>
 
+  <!-- 右下角：給建議（連到阿凱老師教育專區許願池） -->
+  <a class="feedback-fab no-print" id="feedbackFab" href="https://cagoooo.github.io/Akai/wish/" target="_blank" rel="noopener noreferrer"
+     aria-label="給建議：前往阿凱老師的許願池留下回饋（另開新分頁）">
+    <span class="fab-icon" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="28" height="28" focusable="false">
+        <path d="M6 5h20a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4h-9l-6.5 5v-5H6a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4z" fill="#fff"/>
+        <circle cx="11.5" cy="13.5" r="1.9" fill="#5a3412"/>
+        <circle cx="20.5" cy="13.5" r="1.9" fill="#5a3412"/>
+        <path d="M12.3 17.6q3.7 3.2 7.4 0" stroke="#5a3412" stroke-width="1.9" fill="none" stroke-linecap="round"/>
+        <circle cx="8.6" cy="17.2" r="1.5" fill="#f7a1a1"/>
+        <circle cx="23.4" cy="17.2" r="1.5" fill="#f7a1a1"/>
+      </svg>
+    </span>
+    <span class="fab-text">給建議</span>
+    <span class="fab-tip" aria-hidden="true">好用嗎？跟阿凱老師說說 💌</span>
+  </a>
+
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.20-15"></script>
+  <script src="app.js?v=2026.10.21-1"></script>
 </body>
 </html>

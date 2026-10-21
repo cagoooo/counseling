@@ -737,6 +737,8 @@
     const root = document.documentElement.style;
     root.setProperty('--topbar-h', `${$('.topbar').offsetHeight}px`);
     root.setProperty('--stepper-h', `${$('#stepper').offsetHeight || 0}px`);
+    const bar = $('.batch-bar');
+    root.setProperty('--fab-lift', $('#viewBatch').hidden || !bar ? '0px' : `${bar.offsetHeight + 12}px`);
   }
   const stickyTop = () => $('.topbar').offsetHeight + ($('#viewSingle').hidden ? 0 : $('#stepper').offsetHeight);
   function flash(el, cls = 'guide-flash') {
@@ -2072,7 +2074,7 @@
 
     // 新手上路
     $('#btnHelp').addEventListener('click', openHelp);
-    $$('.footer-link').forEach((b) => b.addEventListener('click', () => $(`#${b.dataset.footer}`).click()));
+    $$('.footer-link[data-footer]').forEach((b) => b.addEventListener('click', () => $(`#${b.dataset.footer}`).click()));
     $('#btnHelpKey').addEventListener('click', () => { $('#helpDialog').close(); openSettings(); });
     $('#btnRestore').addEventListener('click', () => $('#restoreFile').click());
     $('#restoreFile').addEventListener('change', (e) => {

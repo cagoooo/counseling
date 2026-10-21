@@ -634,3 +634,48 @@ input[type="number"]:focus { outline: none; border-color: var(--primary); box-sh
   .stepper button:not(:last-child)::after { top: 13px; left: calc(50% + 17px); right: calc(-50% + 17px); }
   .next-step { width: 100%; justify-content: center; }
 }
+
+/* ===== 右下角「給建議」按鈕（可愛對話框臉） ===== */
+.feedback-fab {
+  position: fixed; z-index: 40;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--fab-lift, 0px));
+  display: flex; align-items: center; gap: 8px; padding: 8px 18px 8px 8px; border-radius: 999px;
+  background: linear-gradient(135deg, #f7b468 0%, #e47b30 100%); color: #fff; text-decoration: none; font-weight: 800;
+  box-shadow: 0 12px 26px -10px rgba(186, 90, 20, .65), 0 2px 6px rgba(0, 0, 0, .12);
+  transition: transform .2s ease, box-shadow .2s ease, bottom .25s ease;
+  animation: fabIn .7s cubic-bezier(.34, 1.56, .64, 1) .9s both;
+}
+.feedback-fab::before {
+  content: ""; position: absolute; top: 2px; left: 34px; width: 11px; height: 11px; border-radius: 50%;
+  background: #ff5a7a; border: 2px solid #fff; animation: fabDot 2.4s ease-in-out infinite;
+}
+.feedback-fab:hover { transform: translateY(-3px) rotate(-2deg); box-shadow: 0 16px 30px -10px rgba(186, 90, 20, .75), 0 2px 6px rgba(0, 0, 0, .12); }
+.feedback-fab:hover .fab-icon { animation: fabWiggle .6s ease-in-out; }
+.feedback-fab:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.fab-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, .24); }
+.fab-text { font-size: var(--fs-sm); letter-spacing: .06em; text-shadow: 0 1px 1px rgba(120, 50, 0, .25); }
+.fab-tip {
+  position: absolute; right: 0; bottom: calc(100% + 10px); white-space: nowrap;
+  background: var(--ink); color: #fff; font-weight: 600; font-size: var(--fs-xs); padding: 6px 12px; border-radius: 10px;
+  opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity .2s, transform .2s;
+}
+.fab-tip::after { content: ""; position: absolute; right: 26px; top: 100%; border: 6px solid transparent; border-top-color: var(--ink); }
+.feedback-fab:hover .fab-tip, .feedback-fab:focus-visible .fab-tip { opacity: 1; transform: none; }
+@keyframes fabIn { from { opacity: 0; transform: translateY(30px) scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes fabWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+@keyframes fabDot { 50% { transform: scale(1.25); } }
+@media (max-width: 640px) {
+  .feedback-fab { padding: 6px 14px 6px 6px; gap: 6px; }
+  .feedback-fab::before { left: 30px; }
+  .fab-icon { width: 36px; height: 36px; }
+  .fab-tip { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feedback-fab, .feedback-fab::before, .feedback-fab:hover .fab-icon { animation: none; }
+}
+@media print { .feedback-fab { display: none !important; } }
+/* 頁尾留出空間，避免最後一行被按鈕蓋住 */
+.footer-bottom { padding-bottom: 84px; }
+
+a.footer-link { text-decoration: none; display: inline-flex; align-items: center; }
