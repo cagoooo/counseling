@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.27-1';
+  var APP_VERSION = '2026.10.27-2';
   var BAR_ID = 'sw-update-bar';
   var params = new URLSearchParams(location.search);
 
@@ -103,6 +103,9 @@
     }
   }
 
+  // 第一次開啟時頁面還沒有 Service Worker；它裝好後接管頁面也會觸發 controllerchange，那不是新版，不能重整
+  var HAD_CONTROLLER = !!navigator.serviceWorker.controller;
+
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
     SW_REG = reg;
     if (reg.waiting && navigator.serviceWorker.controller) onUpdateReady();
@@ -134,6 +137,7 @@
   }
 
   navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!HAD_CONTROLLER) { HAD_CONTROLLER = true; return; } // 第一次安裝，不必重整
     if (SILENT) { SILENT = false; return; } // 頁面已是新版，不必重整
     try {
       if (sessionStorage.getItem('crh.swReloaded')) return; // 防止無限重整

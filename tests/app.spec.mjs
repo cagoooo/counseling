@@ -362,6 +362,16 @@ test('本機開發不註冊 Service Worker（避免快取干擾修改）', async
   expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
 });
 
+test('第一次開啟（Service Worker 首次接管頁面）不會自動重新整理', async ({ page }) => {
+  await ready(page);
+  let loads = 0;
+  page.on('load', () => { loads += 1; });
+  await page.goto('/?sw=1');
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 10000 });
+  await page.waitForTimeout(1500);
+  expect(loads).toBe(1);
+});
+
 for (const vp of [{ name: '手機', width: 375, height: 812, minFont: 14 }, { name: '電腦', width: 1440, height: 900, minFont: 15 }]) {
   test(`版面（${vp.name} ${vp.width}）：無水平捲動、頁首不重疊、最小字級達標`, async ({ page }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
