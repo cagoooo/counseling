@@ -708,3 +708,62 @@ a.footer-link { text-decoration: none; display: inline-flex; align-items: center
 .demo-note .link-btn { color: #234a6b; font-weight: 700; }
 .qc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .qc-list li .btn.primary, .qc-actions .btn.primary { color: #fff; }
+
+/* ===== 沒有網路的提示 ===== */
+.offline-banner {
+  max-width: 1600px; margin: 12px auto 0; padding: 10px clamp(16px, 3vw, 40px);
+  background: #fdecea; border-top: 1px solid #f0c4bc; border-bottom: 1px solid #f0c4bc;
+  color: #8a2f1f; font-size: var(--fs-sm);
+}
+.offline-banner.flash { animation: cardFlash 1.4s ease-out; }
+@media (prefers-reduced-motion: reduce) { .offline-banner.flash { animation: none; } }
+
+/* ===== 紀錄本分頁、學期統計 ===== */
+.hist-tabs { display: flex; gap: 6px; margin: 14px 0 12px; border-bottom: 2px solid var(--line); }
+.hist-tab {
+  border: 0; background: none; padding: 10px 16px; font: inherit; font-weight: 700; font-size: var(--fs-base);
+  color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 10px 10px 0 0;
+}
+.hist-tab:hover { color: var(--primary); }
+.hist-tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-soft); }
+.hist-tab:focus-visible { outline: 3px solid rgba(47, 111, 98, .35); outline-offset: 2px; }
+.stats-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; justify-content: space-between; }
+.stats-period { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; flex: 1 1 260px; max-width: 420px; }
+#statsRange { margin: 10px 0 12px; color: var(--primary); font-weight: 600; }
+.stats-foot { margin-top: 12px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.stat-tile { background: var(--field); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.stat-tile .n { display: block; font-size: clamp(1.7rem, 2.4vw, 2.2rem); font-weight: 800; line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat-tile .n small { margin-left: 3px; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.stat-tile .l { font-size: var(--fs-sm); color: var(--muted); }
+.stat-tile.warn { background: #fff4e5; border-color: #f1d2a8; }
+.stat-tile.warn .l { color: #7a4a14; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.stat-card { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--field); }
+.stat-card.wide { grid-column: 1 / -1; }
+.stat-card h3 { margin: 0 0 10px; font-size: var(--fs-base); color: var(--primary); }
+.stat-note { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--muted); }
+.bar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.bar-list li { display: grid; grid-template-columns: minmax(5.5em, 8.5em) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: var(--fs-sm); }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.bar-track { height: 12px; border-radius: 4px; background: #f1ebe0; overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--primary); }
+.bar-num { min-width: 4.6em; text-align: right; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.bar-num small { margin-left: 5px; font-weight: 500; color: var(--muted); }
+.stat-student {
+  border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer;
+  border-bottom: 1px dotted currentColor; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.stat-student:hover { color: var(--primary); }
+.month-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(36px, 1fr); gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.month-col { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+.month-num { min-height: 1.3em; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.month-plot { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; width: 100%; height: 128px; border-bottom: 1px solid var(--line); }
+.month-bar { width: min(70%, 30px); border-radius: 4px 4px 0 0; background: var(--primary); }
+.month-lbl { color: var(--muted); white-space: nowrap; }
+@media (max-width: 640px) {
+  .hist-tab { flex: 1 1 0; padding: 10px 8px; }
+  .stats-head .btn { width: 100%; }
+  .stats-period { max-width: none; }
+  .bar-list li { grid-template-columns: minmax(4.5em, 6.5em) minmax(0, 1fr) auto; gap: 8px; }
+}

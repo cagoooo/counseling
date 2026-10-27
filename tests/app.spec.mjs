@@ -722,3 +722,98 @@ test('字數上限（批次）：產生後超過上限自動精簡', async ({ pa
   await expect(page.locator('#batchProgressText')).toContainText('全部完成', { timeout: 15000 });
   await expect(page.locator('.batch-card[data-seat="2"] [data-count="keyPoints"]')).not.toHaveClass(/over/);
 });
+
+// ---------------------------------------------------------------------------
+test('學期統計：依學期彙整人次、類別、聯繫家長與各月人次，可複製不含姓名的摘要並點學生看紀錄', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-27T09:00:00+08:00'));
+  const mk = (id, name, date, form) => ({ id, savedAt: `${date}T08:00:00.000Z`, form: { studentName: name, date, method: '個別晤談', target: 'student', categories: [], details: [], actions: [], ...form }, keyPoints: `${name}${date}`, contact: '內容' });
+  await ready(page, { storage: { 'crh.history': [
+    mk('1', '王小明', '2026-09-10', { categories: ['人際關係'], details: ['同儕衝突'], actions: ['傾聽與同理'] }),
+    mk('2', '王小明', '2026-10-05', { categories: ['情緒困擾'], details: ['情緒低落'], actions: ['聯絡家長'], target: 'both', method: '電話聯繫' }),
+    mk('3', '3 號 陳美美', '2026-10-20', { categories: ['人際關係', '學習適應'], details: ['疑似霸凌'], actions: ['轉介輔導室'], target: 'parent' }),
+    mk('4', '李大同', '2026-03-02', { categories: ['學習適應'] }),
+  ] } });
+  await page.goto('/');
+  await page.click('#btnHistory');
+  await page.click('#histTabStats');
+  await expect(page.locator('#histListPane')).toBeHidden();
+  await expect(page.locator('#statsPeriod option')).toHaveText(['115 學年度上學期（本學期）', '114 學年度下學期', '115 學年度（全學年）', '114 學年度（全學年）', '全部紀錄']);
+  await expect(page.locator('#statsRange')).toHaveText('統計期間：115/8/1 ～ 116/1/31，共 3 筆紀錄');
+  const tiles = page.locator('.stat-tile');
+  await expect(tiles).toHaveCount(5); // 人次、學生、聯繫家長、轉介、通報提醒
+  await expect(tiles.nth(0)).toContainText('3次');
+  await expect(tiles.nth(1)).toContainText('2位');
+  await expect(tiles.nth(2)).toContainText('2次');
+  await expect(tiles.nth(3)).toContainText('1次');
+  await expect(page.locator('.month-col')).toHaveCount(6);
+  await expect(page.locator('.month-col').nth(2)).toContainText('2'); // 10 月 2 次
+  await page.click('#btnCopyStats');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip).toContain('【115 學年度上學期 輔導紀錄統計】');
+  expect(clip).toContain('輔導類別：人際關係 2 次、情緒困擾 1 次、學習適應 1 次');
+  expect(clip).toContain('聯繫家長：2 次｜轉介輔導室：1 次');
+  expect(clip).toContain('輔導對象：學生本人 1 次、家長 1 次、學生＋家長 1 次');
+  expect(clip).not.toMatch(/王小明|陳美美/);
+  // 點學生 → 回到紀錄列表，只看這位學生在本學期的紀錄
+  await page.click('.stat-student[data-student="王小明"]');
+  await expect(page.locator('#histListPane')).toBeVisible();
+  await expect(page.locator('#historySummary')).toContainText('王小明：共 2 筆');
+  await expect(page.locator('#historyFrom')).toHaveValue('2026-08-01');
+  // 切到上學期
+  await page.click('#histTabStats');
+  await page.selectOption('#statsPeriod', 's:114:2');
+  await expect(page.locator('#statsRange')).toContainText('共 1 筆紀錄');
+  await expect(page.locator('.stat-tile')).toHaveCount(4);
+});
+
+test('學期統計：沒有紀錄時顯示空白提示，複製按鈕停用', async ({ page }) => {
+  await ready(page);
+  await page.goto('/');
+  await page.click('#btnHistory');
+  await page.click('#histTabStats');
+  await expect(page.locator('#statsBody')).toContainText('這段期間還沒有輔導紀錄');
+  await expect(page.locator('#btnCopyStats')).toBeDisabled();
+});
+
+test('沒有網路：顯示提示、按產生不會送出，恢復連線後提示消失', async ({ page, context }) => {
+  const calls = await mockGemini(page);
+  await ready(page);
+  await page.goto('/');
+  await expect(page.locator('#offlineBanner')).toBeHidden();
+  await context.setOffline(true);
+  await expect(page.locator('#offlineBanner')).toBeVisible();
+  await page.fill('#event', '下課推人');
+  await page.click('#btnGenerate');
+  await expect(page.locator('#toast')).toContainText('目前沒有網路');
+  expect(calls).toHaveLength(0);
+  await context.setOffline(false);
+  await expect(page.locator('#offlineBanner')).toBeHidden();
+  await expect(page.locator('#toast')).toContainText('網路恢復了');
+  await generate(page);
+  await expect(page.locator('#status')).toContainText('完成');
+});
+
+test('批次：產生途中斷線會等網路恢復後自動繼續', async ({ page, context }) => {
+  test.setTimeout(60000);
+  let n = 0;
+  await page.route(API, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    n += 1;
+    if (n === 1) {
+      await context.setOffline(true);
+      return route.abort('internetdisconnected');
+    }
+    return route.fulfill({ headers: CORS, json: { candidates: [{ content: { parts: [{ text: JSON.stringify(DEFAULT_REPLY) }] } }] } });
+  });
+  await ready(page);
+  await page.goto('/');
+  await page.click('#tabBatch');
+  await page.click('.seat[data-seat="2"]');
+  await page.click('#batchTagLib [data-tag="遲到"]');
+  await page.click('#btnBatchGenerate');
+  await expect(page.locator('#batchProgressText')).toContainText('網路中斷了');
+  await expect(page.locator('#btnBatchStop')).toBeVisible();
+  await context.setOffline(false);
+  await expect(page.locator('#batchProgressText')).toContainText('全部完成', { timeout: 15000 });
+  await expect(page.locator('.batch-card[data-seat="2"] [data-field="contact"]')).not.toHaveValue('');
+});

@@ -669,7 +669,7 @@
       if (e.status >= 500) return 'Google 伺服器暫時忙碌，請稍後再試。';
       return `發生錯誤（${e.status}）：${m.slice(0, 120)}`;
     }
-    if (e && e.name === 'TypeError') return '網路連線失敗，請確認網路後再試。';
+    if (e && e.name === 'TypeError') return isOffline() ? '網路中斷了，請確認連線後再按一次（草稿已自動保存）。' : '網路連線失敗，請確認網路後再試。';
     return e?.message || '發生未知錯誤';
   }
   const isFatal = (e) => e instanceof ApiError && [400, 401, 403, 404, 429].includes(e.status);
@@ -906,7 +906,7 @@
       goStep(4, { focus: true });
       return;
     }
-    if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
+    if (!requireOnline() || !requireKey('不用金鑰：複製提示詞到 Gemini')) return;
     const { system, user, aliases } = buildMessages(form, 'json');
     $('#demoNote').hidden = true;
     let autoFit = [];
@@ -968,7 +968,7 @@
     const kp0 = $('#keyPoints').value.trim();
     const ct0 = $('#contact').value.trim();
     if (!kp0 && !ct0) { toast('先產生紀錄，才能改寫', 'error'); return; }
-    if (!requireKey('不用金鑰：複製提示詞到 Gemini')) return;
+    if (!requireOnline() || !requireKey('不用金鑰：複製提示詞到 Gemini')) return;
     const form = readForm();
     const aliases = buildAliases(form);
     const c = { ...form, target: effectiveTarget(form.target, form.actions) };
@@ -1077,6 +1077,29 @@
     updateCounts();
     saveDraft();
     setStatus('已從貼上內容拆段 ✓', 'ok');
+  }
+
+  // ---------- 網路狀態 ----------
+  const isOffline = () => navigator.onLine === false;
+  function renderOnline() { $('#offlineBanner').hidden = !isOffline(); }
+  function requireOnline() {
+    if (!isOffline()) return true;
+    toast('目前沒有網路，AI 暫時不能產生。草稿會自動保存，網路恢復後再按一次就好', 'error', 5000);
+    const b = $('#offlineBanner');
+    b.hidden = false;
+    b.classList.remove('flash');
+    void b.offsetWidth;
+    b.classList.add('flash');
+    return false;
+  }
+  // 批次產生途中斷線：等網路恢復再繼續；按「停止」會提早結束並回傳 false
+  async function waitOnline(onTick) {
+    while (isOffline()) {
+      if (batchStop) return false;
+      onTick();
+      await sleep(1000);
+    }
+    return !batchStop;
   }
 
   // ---------- 批次補登 ----------
@@ -1237,7 +1260,7 @@
     }
     const todo = selected.filter((k) => !(batch.results[k]?.keyPoints || batch.results[k]?.contact));
     if (!todo.length) { toast('這批都已經產生過了。要重寫某一位，請在結果卡片按「重寫」', 'error', 4500); return; }
-    if (!requireKey('複製提示詞')) return;
+    if (!requireOnline() || !requireKey('複製提示詞')) return;
 
     batchBusy = true;
     batchStop = false;
@@ -1259,6 +1282,7 @@
         const user = ['### 輔導資料', ...caseLines(c, (s) => deidentify(s, aliases))].join('\n');
         try {
           let r;
+          let netWait = 0;
           for (let wait = 0; ; wait += 1) {
             try {
               r = await callGemini(system, user, {
@@ -1266,6 +1290,14 @@
               });
               break;
             } catch (e) {
+              // 網路中斷：等連線恢復後自動接著做同一位
+              if (e && e.name === 'TypeError' && netWait < 5) {
+                netWait += 1;
+                const ok = await waitOnline(() => setBatchProgress(done, todo.length, `📡 網路中斷了，連線恢復後會自動繼續 ${seatLabel(k)}（可按「停止」）`));
+                if (!ok) { stopped = true; break; }
+                await sleep(1500);
+                continue;
+              }
               // 每分鐘額度用完：倒數後自動繼續同一位（最多等 3 次）；每日額度用完就停
               if (!(e instanceof ApiError && e.status === 429 && !e.daily && wait < 3)) throw e;
               const sec = Math.min(90, Math.max(10, e.retryAfter || 60));
@@ -1337,7 +1369,7 @@
 
   async function batchShorten(k, field, btn) {
     if (batchBusy) return;
-    if (!requireKey('複製提示詞')) return;
+    if (!requireOnline() || !requireKey('複製提示詞')) return;
     const r = batch.results[k];
     batchBusy = true;
     btn.classList.add('loading');
@@ -1704,6 +1736,162 @@
     const stu = $('#historyStudent').value;
     downloadFile(`輔導紀錄${stu ? `_${stu}` : ''}_${todayStr()}.csv`, `\uFEFF${rows.map((row) => row.map(cell).join(',')).join('\r\n')}`, 'text/csv;charset=utf-8');
     toast(`已匯出 ${list.length} 筆`);
+  }
+
+  // ---------- 學期統計 ----------
+  // 學年度：8 月～隔年 7 月；上學期 8～1 月、下學期 2～7 月
+  function semesterOf(iso) {
+    const [y, m] = String(iso || '').split('-').map(Number);
+    if (!y || !m) return null;
+    return { ay: m >= 8 ? y - 1911 : y - 1912, term: m >= 8 || m === 1 ? 1 : 2 };
+  }
+  function periodRange(key) {
+    const [kind, a, t] = key.split(':');
+    const y = Number(a) + 1911; // 學年度開始那年（西元）
+    if (kind === 's') return t === '1' ? [`${y}-08-01`, `${y + 1}-01-31`] : [`${y + 1}-02-01`, `${y + 1}-07-31`];
+    if (kind === 'y') return [`${y}-08-01`, `${y + 1}-07-31`];
+    return ['', ''];
+  }
+  function periodLabel(key) {
+    const [kind, a, t] = key.split(':');
+    if (kind === 's') return `${a} 學年度${t === '1' ? '上' : '下'}學期`;
+    if (kind === 'y') return `${a} 學年度（全學年）`;
+    return '全部紀錄';
+  }
+  function renderStatsOptions() {
+    const sel = $('#statsPeriod');
+    const cur = sel.value;
+    const now = semesterOf(todayStr());
+    const nowKey = `s:${now.ay}:${now.term}`;
+    const sems = new Set([nowKey]);
+    const years = new Set();
+    loadHistory().forEach((r) => {
+      const s = semesterOf(recDate(r));
+      if (s) { sems.add(`s:${s.ay}:${s.term}`); years.add(`y:${s.ay}`); }
+    });
+    const rank = (k) => { const [, a, t] = k.split(':'); return Number(a) * 10 + Number(t || 0); };
+    const desc = (set) => [...set].sort((a, b) => rank(b) - rank(a));
+    const opts = [...desc(sems), ...desc(years), 'all'];
+    sel.innerHTML = opts.map((k) => `<option value="${k}">${escapeHtml(periodLabel(k))}${k === nowKey ? '（本學期）' : ''}</option>`).join('');
+    sel.value = opts.includes(cur) ? cur : nowKey;
+  }
+
+  const TARGET_SHORT = { student: '學生本人', parent: '家長', both: '學生＋家長', teacher: '教師／輔導室' };
+  // 次數多的在前；次數相同時依畫面上選項的順序（沒有順序表的依筆畫）
+  const tally = (items, order = []) => {
+    const idx = (k) => (order.includes(k) ? order.indexOf(k) : order.length);
+    return Object.entries(items.reduce((o, k) => { o[k] = (o[k] || 0) + 1; return o; }, {}))
+      .sort((a, b) => b[1] - a[1] || idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0], 'zh-Hant', { numeric: true }));
+  };
+  function monthsBetween(a, b) {
+    const out = [];
+    let [y, m] = a.split('-').map(Number);
+    const [ey, em] = b.split('-').map(Number);
+    while (y < ey || (y === ey && m <= em)) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`);
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+    return out.slice(-24);
+  }
+  function computeStats(key) {
+    const [from, to] = periodRange(key);
+    const list = loadHistory().filter((r) => { const d = recDate(r); return (!from || d >= from) && (!to || d <= to); });
+    const f = (r) => r.form || {};
+    const dates = list.map(recDate).sort();
+    const start = from || dates[0] || '';
+    const end = to || dates[dates.length - 1] || '';
+    const months = start ? monthsBetween(start.slice(0, 7), end.slice(0, 7))
+      .map((mo) => [mo, list.filter((r) => recDate(r).startsWith(mo)).length]) : [];
+    return {
+      key, from, to, start, end, list, n: list.length, months,
+      students: tally(list.map(studentOf)),
+      parentContact: list.filter((r) => ['parent', 'both'].includes(f(r).target) || (f(r).actions || []).includes('聯絡家長')).length,
+      referral: list.filter((r) => (f(r).actions || []).includes('轉介輔導室')).length,
+      sensitive: list.filter((r) => (f(r).details || []).some((d) => SENSITIVE_TAGS.includes(d))).length,
+      cats: tally(list.flatMap((r) => f(r).categories || []), CATEGORIES),
+      methods: tally(list.map((r) => f(r).method || '未填'), METHODS),
+      targets: tally(list.map((r) => TARGET_SHORT[f(r).target] || '未填'), Object.values(TARGET_SHORT)),
+      details: tally(list.flatMap((r) => f(r).details || []), Object.values(DETAILS_MAP).flat()).slice(0, 8),
+    };
+  }
+
+  // 橫條清單：條長＝和第一名相比，數字旁標出佔人次的百分比
+  function barList(rows, total, { student = false } = {}) {
+    if (!rows.length) return '<p class="muted">（沒有資料）</p>';
+    const top = rows[0][1];
+    return `<ul class="bar-list">${rows.map(([label, n]) => {
+      const pct = Math.round((n / total) * 100);
+      const name = student
+        ? `<button type="button" class="stat-student" data-student="${escapeHtml(label)}" title="查看 ${escapeHtml(label)} 的紀錄">${escapeHtml(label)}</button>`
+        : escapeHtml(label);
+      return `<li title="${escapeHtml(label)}：${n} 次（佔 ${pct}%）"><span class="bar-label">${name}</span><span class="bar-track"><span class="bar-fill" style="width:${Math.max(3, (n / top) * 100)}%"></span></span><span class="bar-num">${n}<small>${pct}%</small></span></li>`;
+    }).join('')}</ul>`;
+  }
+  function monthChart(months) {
+    const top = Math.max(1, ...months.map((m) => m[1]));
+    const label = months.map(([mo, n]) => `${Number(mo.slice(5))} 月 ${n} 次`).join('、');
+    return `<div class="month-chart" role="img" aria-label="各月人次：${escapeHtml(label)}">${months.map(([mo, n]) => {
+      const [y, m] = mo.split('-').map(Number);
+      // 數字緊貼在長條上方；長條最高 100px
+      return `<div class="month-col" title="${y - 1911} 年 ${m} 月：${n} 次"><span class="month-plot"><span class="month-num">${n || ''}</span><span class="month-bar" style="height:${n ? Math.max(4, Math.round((n / top) * 100)) : 0}px"></span></span><span class="month-lbl">${m} 月</span></div>`;
+    }).join('')}</div>`;
+  }
+
+  let lastStats = null;
+  function renderStats() {
+    const s = computeStats($('#statsPeriod').value);
+    lastStats = s;
+    $('#statsRange').textContent = s.start ? `統計期間：${rocShort(s.start)} ～ ${rocShort(s.end)}，共 ${s.n} 筆紀錄` : '還沒有任何紀錄';
+    $('#btnCopyStats').disabled = !s.n;
+    if (!s.n) {
+      $('#statsBody').innerHTML = '<p class="empty-text big">這段期間還沒有輔導紀錄</p>';
+      return;
+    }
+    const tile = (n, unit, label, cls = '') => `<div class="stat-tile ${cls}"><span class="n">${n}<small>${unit}</small></span><span class="l">${label}</span></div>`;
+    const topStu = s.students.slice(0, 10);
+    const restStu = s.students.length - topStu.length;
+    $('#statsBody').innerHTML = `
+      <div class="stat-tiles">
+        ${tile(s.n, '次', '輔導人次')}
+        ${tile(s.students.length, '位', '輔導學生')}
+        ${tile(s.parentContact, '次', '聯繫家長')}
+        ${tile(s.referral, '次', '轉介輔導室')}
+        ${s.sensitive ? tile(s.sensitive, '筆', '涉及通報事項標籤，請確認已依學校流程通報', 'warn') : ''}
+      </div>
+      <div class="stats-grid">
+        <section class="stat-card"><h3>輔導類別</h3>${barList(s.cats, s.n)}<p class="stat-note">一筆紀錄可以勾選多個類別，合計可能超過人次。</p></section>
+        <section class="stat-card"><h3>輔導方式</h3>${barList(s.methods, s.n)}</section>
+        <section class="stat-card"><h3>輔導對象</h3>${barList(s.targets, s.n)}</section>
+        <section class="stat-card"><h3>常見狀況（前 8 項）</h3>${barList(s.details, s.n)}</section>
+        <section class="stat-card wide"><h3>各月人次</h3>${monthChart(s.months)}</section>
+        <section class="stat-card wide"><h3>輔導次數較多的學生</h3>${barList(topStu, s.n, { student: true })}<p class="stat-note">點學生姓名可以看這段期間的完整紀錄${restStu ? `；另有 ${restStu} 位學生沒有列出` : ''}。</p></section>
+      </div>`;
+  }
+
+  // 給輔導室報表用的文字摘要（不含學生姓名）
+  function statsText(s) {
+    const join = (rows) => rows.map(([k, n]) => `${k} ${n} 次`).join('、') || '無';
+    return [
+      `【${periodLabel(s.key)} 輔導紀錄統計】`,
+      `統計期間：${rocShort(s.start)}～${rocShort(s.end)}`,
+      `輔導人次：${s.n} 次（學生 ${s.students.length} 位）`,
+      `聯繫家長：${s.parentContact} 次｜轉介輔導室：${s.referral} 次${s.sensitive ? `｜涉及通報事項標籤：${s.sensitive} 筆` : ''}`,
+      `輔導類別：${join(s.cats)}`,
+      `輔導方式：${join(s.methods)}`,
+      `輔導對象：${join(s.targets)}`,
+      `各月人次：${s.months.map(([mo, n]) => `${Number(mo.slice(5))} 月 ${n}`).join('、')}`,
+    ].join('\n');
+  }
+
+  function switchHistTab(pane) {
+    $$('.hist-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.pane === pane)));
+    $('#histListPane').hidden = pane !== 'list';
+    $('#histStatsPane').hidden = pane !== 'stats';
+    if (pane === 'stats') {
+      renderStatsOptions();
+      renderStats();
+    }
   }
 
   // ---------- 備份與還原 ----------
@@ -2246,6 +2434,7 @@
     // 紀錄本
     $('#btnHistory').addEventListener('click', () => {
       $('#historySearch').value = '';
+      switchHistTab('list');
       renderHistory();
       renderBackupHint();
       $('#historyDialog').showModal();
@@ -2259,6 +2448,34 @@
       renderHistory();
     });
     $('#btnPrintHistory').addEventListener('click', printHistory);
+    $$('.hist-tab').forEach((t) => t.addEventListener('click', () => switchHistTab(t.dataset.pane)));
+    $('#statsPeriod').addEventListener('change', renderStats);
+    $('#btnCopyStats').addEventListener('click', () => {
+      if (!lastStats || !lastStats.n) return;
+      copyText(statsText(lastStats)).then((ok) => toast(ok ? '已複製統計摘要（不含學生姓名）' : '複製失敗', ok ? '' : 'error'));
+    });
+    // 點統計裡的學生 → 回到紀錄列表，只看這位學生在這段期間的紀錄
+    $('#statsBody').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-student]');
+      if (!b || !lastStats) return;
+      renderStudentOptions();
+      $('#historySearch').value = '';
+      $('#historyStudent').value = b.dataset.student;
+      $('#historyFrom').value = lastStats.from;
+      $('#historyTo').value = lastStats.to;
+      switchHistTab('list');
+      renderHistory();
+    });
+
+    // 網路狀態
+    window.addEventListener('offline', () => {
+      renderOnline();
+      toast('網路中斷了：AI 暫時不能產生，草稿會自動保存', 'error', 5000);
+    });
+    window.addEventListener('online', () => {
+      renderOnline();
+      toast('網路恢復了，可以繼續產生紀錄 ✓');
+    });
 
     // 追蹤輔導
     $('#studentName').addEventListener('input', () => refreshFollowup());
@@ -2361,6 +2578,7 @@
   // ---------- 啟動 ----------
   renderStatic();
   renderPublicBanner();
+  renderOnline();
   if (!loadDraft()) fillForm({ date: todayStr() });
   if (!$('#date').value) $('#date').value = todayStr();
   updateCounts();

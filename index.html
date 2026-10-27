@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-1">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-1">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.21-6">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-1">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.21-6">
-  <script src="sw-register.js?v=2026.10.21-6" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.10.27-1">
+  <script src="sw-register.js?v=2026.10.27-1" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -54,6 +54,10 @@
   <div class="public-banner no-print" id="publicBanner" role="status" hidden>
     🔒 <strong>公用電腦模式</strong>：關閉這個分頁後，草稿、紀錄本與名冊都會自動清除。需要保留請先到紀錄本「備份成檔案」。
     <button type="button" class="link-btn" id="btnPublicOff">關閉此模式</button>
+  </div>
+
+  <div class="offline-banner no-print" id="offlineBanner" role="status" aria-live="polite" hidden>
+    📡 <strong>目前沒有網路</strong>：AI 暫時不能產生。可以先繼續填寫，草稿會自動保存，網路恢復後再按「產生」就好。
   </div>
 
   <div class="mode-tabs no-print" role="tablist" aria-label="模式">
@@ -534,6 +538,11 @@
         <input type="file" id="restoreFile" accept=".json,application/json" hidden>
       </div>
       <p class="small-text">備份檔含紀錄與班級名冊（有學生姓名），請存在自己的電腦或學校雲端硬碟，不要傳到公開群組。</p>
+      <div class="hist-tabs" role="tablist" aria-label="紀錄本檢視">
+        <button type="button" role="tab" class="hist-tab" id="histTabList" data-pane="list" aria-selected="true" aria-controls="histListPane">📋 紀錄列表</button>
+        <button type="button" role="tab" class="hist-tab" id="histTabStats" data-pane="stats" aria-selected="false" aria-controls="histStatsPane">📊 學期統計</button>
+      </div>
+      <div id="histListPane" role="tabpanel" aria-labelledby="histTabList">
       <div class="history-filters">
         <input id="historySearch" type="search" placeholder="搜尋內容、類別…" aria-label="搜尋紀錄">
         <select id="historyStudent" aria-label="依學生篩選"><option value="">全部學生</option></select>
@@ -551,6 +560,16 @@
           <button type="button" class="btn" id="btnPrintHistory" title="列印目前篩選出的紀錄">🖨️ 列印</button>
           <button type="button" class="btn" id="btnExportCsv" title="匯出目前篩選出的紀錄">⬇️ 匯出 Excel（CSV）</button>
         </div>
+      </div>
+      </div>
+      <div id="histStatsPane" role="tabpanel" aria-labelledby="histTabStats" hidden>
+        <div class="stats-head">
+          <label class="stats-period"><span>統計期間</span><select id="statsPeriod"></select></label>
+          <button type="button" class="btn" id="btnCopyStats">📋 複製統計摘要</button>
+        </div>
+        <p class="small-text" id="statsRange"></p>
+        <div id="statsBody"></div>
+        <p class="small-text stats-foot">統計只在這台電腦上計算，不會上傳。「複製統計摘要」不含學生姓名，可以直接貼到輔導室的報表。</p>
       </div>
     </div>
   </dialog>
@@ -635,6 +654,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.21-6"></script>
+  <script src="app.js?v=2026.10.27-1"></script>
 </body>
 </html>
