@@ -71,7 +71,7 @@ test('載入沒有錯誤，四處版本號一致，頁尾署名正確', async ({
   expect(new Set(vs)).toEqual(new Set([ver]));
   const credit = page.locator('.site-credit__author');
   await expect(credit).toHaveText('阿凱老師');
-  await expect(credit).toHaveAttribute('href', 'https://www.smes.tyc.edu.tw/modules/school/index.php?department_id=2&zone_id=0&page_id=2&content_id=11&type=news&from_op=all_news#a5');
+  await expect(credit).toHaveAttribute('href', 'https://cagoooo.github.io/Akai/');
   await expect(page.locator('.footer-school')).toContainText('石門國民小學');
   expect(html).not.toContain('新明');
   expect(errors).toEqual([]);
