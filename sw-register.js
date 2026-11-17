@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var APP_VERSION = '2026.10.27-2';
+  var APP_VERSION = '2026.11.17-1';
   var BAR_ID = 'sw-update-bar';
   var params = new URLSearchParams(location.search);
 

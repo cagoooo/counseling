@@ -15,8 +15,8 @@
   <meta property="og:url" content="https://cagoooo.github.io/counseling/">
   <meta property="og:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta property="og:description" content="口語描述或點選標籤，整理成「輔導內容重點＋聯繫內容」，一鍵複製到校務系統。姓名自動換代號，期末可用座號批次補登。">
-  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-2">
-  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-2">
+  <meta property="og:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.11.17-1">
+  <meta property="og:image:secure_url" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.11.17-1">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="輔導紀錄小幫手｜口語描述變正式輔導紀錄">
   <meta name="twitter:description" content="口語描述或點選標籤，整理成正式輔導紀錄，一鍵複製到校務系統。">
-  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.10.27-2">
+  <meta name="twitter:image" content="https://cagoooo.github.io/counseling/og-image.png?v=2026.11.17-1">
 
   <!-- 網站圖示與 PWA -->
   <link rel="icon" href="favicon.ico" sizes="any">
@@ -33,8 +33,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="輔導紀錄">
 
-  <link rel="stylesheet" href="style.css?v=2026.10.27-2">
-  <script src="sw-register.js?v=2026.10.27-2" defer></script>
+  <link rel="stylesheet" href="style.css?v=2026.11.17-1">
+  <script src="sw-register.js?v=2026.11.17-1" defer></script>
 </head>
 <body>
   <header class="topbar no-print">
@@ -473,7 +473,7 @@
           <button type="button" class="btn small" id="btnToggleKey">顯示</button>
         </div>
       </label>
-      <p class="small-text">還沒有金鑰？到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> 用學校或個人 Google 帳號免費建立。</p>
+      <p class="small-text">還沒有金鑰？到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> 用<strong>個人信箱</strong>（個人 Gmail）的 Google 帳號免費建立。⚠️ 學校信箱的帳號常常無法建立或使用金鑰，請用個人信箱的金鑰才對。</p>
       <label class="check">
         <input type="checkbox" id="rememberKey">
         <span>記住金鑰（公用電腦請不要勾選，關閉分頁就會忘記）</span>
@@ -590,7 +590,7 @@
 
       <h3 class="dialog-section">🔑 第一次使用：申請免費的 Gemini 金鑰</h3>
       <ol class="help-key">
-        <li>打開 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio 金鑰頁面</a>，用你的 Google 帳號登入。</li>
+        <li>打開 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio 金鑰頁面</a>，用<strong>個人信箱</strong>（個人 Gmail）的 Google 帳號登入。⚠️ 學校信箱的帳號常常無法建立或使用金鑰，請用個人信箱的金鑰才對。</li>
         <li>按「建立 API 金鑰」（英文介面是 Create API key；畫面文字可能略有不同）。</li>
         <li>複製產生的金鑰（AIza 開頭的一長串英數字）。</li>
         <li>回到這裡按右上角「⚙️ 設定」，貼上金鑰後按「測試並儲存」。</li>
@@ -654,6 +654,6 @@
   <div id="printArea" class="print-only"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.10.27-2"></script>
+  <script src="app.js?v=2026.11.17-1"></script>
 </body>
 </html>
